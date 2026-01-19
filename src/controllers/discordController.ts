@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
 import * as UserModel from '../models/userModel';
 import * as ClassModel from '../models/classModel'; // For settings
-import dotenv from 'dotenv';
 
-dotenv.config();
 
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
