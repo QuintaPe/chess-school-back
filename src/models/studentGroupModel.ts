@@ -4,8 +4,8 @@ import { randomUUID } from "crypto";
 export interface StudentGroup {
     id?: string;
     name: string;
-    teacher_id: string;
-    description?: string;
+    teacher_id?: string | null;
+    description?: string | null;
     created_at?: string;
 }
 
@@ -13,7 +13,7 @@ export const createGroup = async (group: StudentGroup) => {
     const id = randomUUID();
     const result = await db.execute({
         sql: "INSERT INTO student_groups (id, name, teacher_id, description) VALUES (?, ?, ?, ?)",
-        args: [id, group.name, group.teacher_id, group.description || '']
+        args: [id, group.name, group.teacher_id ?? null, group.description ?? null]
     });
     return { ...result, lastInsertRowid: id };
 };

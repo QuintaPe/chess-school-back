@@ -6,15 +6,12 @@ export interface Class {
     title: string;
     level: 'beginner' | 'intermediate' | 'advanced';
     start_time: string;
-    end_time?: string;
-    capacity: number;
-    teacher_id?: string;
+    teacher_id?: string | null;
     group_id?: string | null;
     status: 'scheduled' | 'live' | 'completed' | 'canceled';
-    meeting_link?: string;
-    recording_url?: string;
-    platform?: string;
-    video_url?: string;
+    meeting_link?: string | null;
+    video_url?: string | null;
+    recurring_days?: number[] | null; // [1, 3, 5] for Mon, Wed, Fri
 }
 
 export const getClasses = async (filters: { level?: string; status?: string; userId?: string }) => {
@@ -63,23 +60,27 @@ export const registerUser = async (userId: string, classId: string) => {
 
 export const createClass = async (cls: Class) => {
     const id = randomUUID();
+
+    // Logic: if group_id is provided, we can fetch teacher_id from group, 
+    // but for now, we follow the rule: "teacher_id solo si no hay group_id"
+    // If group_id exists, we set teacher_id to null in this table instance if desired, 
+    // or just pass what's provided.
+    const finalTeacherId = cls.group_id ? null : cls.teacher_id;
+
     const result = await db.execute({
-        sql: `INSERT INTO classes (id, title, level, start_time, end_time, capacity, teacher_id, group_id, status, meeting_link, recording_url, platform, video_url)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO classes (id, title, level, start_time, teacher_id, group_id, status, meeting_link, video_url, recurring_days)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
             id,
             cls.title,
             cls.level,
             cls.start_time,
-            cls.end_time || null,
-            cls.capacity,
-            cls.teacher_id || null,
-            cls.group_id || null,
+            finalTeacherId ?? null,
+            cls.group_id ?? null,
             cls.status,
-            cls.meeting_link || null,
-            cls.recording_url || null,
-            cls.platform || null,
-            cls.video_url || null
+            cls.meeting_link ?? null,
+            cls.video_url ?? null,
+            JSON.stringify(cls.recurring_days || [])
         ]
     });
     return { ...result, lastInsertRowid: id };
@@ -106,7 +107,12 @@ export const updateClass = async (id: string, updates: Partial<Class>) => {
     if (fields.length === 0) return;
 
     const setClause = fields.map(field => `${field} = ?`).join(', ');
-    const args = [...Object.values(updates), id];
+    const args = fields.map(field => {
+        const val = (updates as any)[field];
+        if (field === 'recurring_days') return JSON.stringify(val || []);
+        return val;
+    });
+    args.push(id);
 
     await db.execute({
         sql: `UPDATE classes SET ${setClause} WHERE id = ?`,

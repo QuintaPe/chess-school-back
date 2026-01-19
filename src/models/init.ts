@@ -87,15 +87,12 @@ export const initDB = async () => {
                 title TEXT NOT NULL,
                 level TEXT CHECK(level IN ('beginner', 'intermediate', 'advanced')),
                 start_time DATETIME NOT NULL,
-                end_time DATETIME,
-                capacity INTEGER DEFAULT 20,
                 teacher_id TEXT,
                 group_id TEXT, -- Optional: Associate class with a specific group
                 status TEXT CHECK(status IN ('scheduled', 'live', 'completed', 'canceled')) DEFAULT 'scheduled',
                 meeting_link TEXT,
-                recording_url TEXT,
-                platform TEXT,
                 video_url TEXT,
+                recurring_days TEXT, -- JSON array of numbers
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (teacher_id) REFERENCES users(id),
@@ -105,10 +102,9 @@ export const initDB = async () => {
 
         // Migrations for Classes
         try { await db.execute("ALTER TABLE classes ADD COLUMN group_id TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE classes ADD COLUMN platform TEXT"); } catch (e) { }
         try { await db.execute("ALTER TABLE classes ADD COLUMN video_url TEXT"); } catch (e) { }
+        try { await db.execute("ALTER TABLE classes ADD COLUMN recurring_days TEXT"); } catch (e) { }
         try { await db.execute("ALTER TABLE classes ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) { }
-        try { await db.execute("ALTER TABLE classes ADD COLUMN capacity INTEGER DEFAULT 20"); } catch (e) { }
 
 
         // 7. CLASS REGISTRATIONS Table
