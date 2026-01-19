@@ -4,6 +4,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse';
+import { logActivity } from '../models/activityModel';
 
 const puzzleSchema = z.object({
     externalId: z.string().optional(),
@@ -23,13 +24,15 @@ const updatePuzzleSchema = puzzleSchema.partial();
 
 export const listPuzzles = async (req: Request, res: Response) => {
     try {
-        const { ratingMin, ratingMax, tags, page, limit } = req.query;
+        const { ratingMin, ratingMax, tags, page, limit, sort, order } = req.query;
         const result = await PuzzleModel.getPuzzles({
             ratingMin: ratingMin ? parseInt(ratingMin as string) : undefined,
             ratingMax: ratingMax ? parseInt(ratingMax as string) : undefined,
             tags: tags ? (tags as string).split(',') : undefined,
             page: page ? parseInt(page as string) : 1,
-            limit: limit ? parseInt(limit as string) : 20
+            limit: limit ? parseInt(limit as string) : 20,
+            sort: sort as string,
+            order: order as 'asc' | 'desc'
         });
         return res.json(result);
     } catch (error) {
@@ -38,24 +41,77 @@ export const listPuzzles = async (req: Request, res: Response) => {
     }
 };
 
+import * as UserModel from '../models/userModel';
+
 export const solvePuzzle = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
-        const { puzzleId, moves } = req.body; // moves is an array of strings
+        const { puzzleId, moves, solution } = req.body; // moves or solution string (puzzleId should be string)
 
-        const puzzle = await PuzzleModel.getPuzzleById(puzzleId);
+        const puzzle = await PuzzleModel.getPuzzleById(puzzleId as string);
         if (!puzzle) return res.status(404).json({ message: "Puzzle not found" });
 
-        // Check if moves match sequence exactly
-        const isCorrect = JSON.stringify(puzzle.solution) === JSON.stringify(moves);
+        // Normalize user moves: support both array and space-separated string
+        let userMoves: string[] = [];
+        if (Array.isArray(moves)) userMoves = moves;
+        else if (typeof solution === 'string') userMoves = solution.split(' ');
+        else if (Array.isArray(solution)) userMoves = solution;
 
-        await PuzzleModel.recordPuzzleSolve(userId, puzzleId, isCorrect);
+        // Check if moves match sequence exactly
+        const isCorrect = JSON.stringify(puzzle.solution) === JSON.stringify(userMoves);
+
+        await PuzzleModel.recordPuzzleSolve(userId, puzzleId as string, isCorrect);
+
+        if (isCorrect) {
+            const user = await UserModel.findUserById(userId);
+            if (user) {
+                await logActivity('puzzle_solved', `El alumno ${(user as any).name} ha resuelto el puzzle #${puzzleId}`);
+            }
+        }
+
+        // --- ELO Calculation ---
+        const userStats = await UserModel.getUserStats(userId);
+        if (userStats) {
+            const K = 32; // Scaling factor
+            const currentRating = (userStats.rating || 1200) as number;
+            const puzzleRating = (puzzle.rating || 1200) as number;
+
+            // Experienced probability
+            const expectedScore = 1 / (1 + Math.pow(10, (puzzleRating - currentRating) / 400));
+
+            // Actual Score
+            const actualScore = isCorrect ? 1 : 0;
+
+            // Calculate change
+            let ratingChange = Math.round(K * (actualScore - expectedScore));
+
+            // Safeguard: Solving correctly should never decrease rating
+            if (isCorrect && ratingChange < 0) ratingChange = 0;
+            // Safeguard: Failing should never increase rating
+            if (!isCorrect && ratingChange > 0) ratingChange = 0;
+
+            const newRating = currentRating + ratingChange;
+
+            await UserModel.updateUserStats(userId, {
+                rating: newRating,
+                // also update stats
+                puzzles_solved: isCorrect ? ((userStats.puzzles_solved || 0) as number) + 1 : (userStats.puzzles_solved || 0) as number
+            });
+
+            return res.json({
+                correct: isCorrect,
+                message: isCorrect ? "Excellent! You solved it." : "Incorrect. Try again.",
+                ratingDelta: newRating - currentRating,
+                newRating
+            });
+        }
 
         return res.json({
             correct: isCorrect,
             message: isCorrect ? "Excellent! You solved it." : "Incorrect solution. Try again."
         });
     } catch (error) {
+        console.error(error);
         return res.status(500).json({ message: "Error processing solution" });
     }
 };
@@ -64,7 +120,7 @@ export const createPuzzle = async (req: Request, res: Response) => {
     try {
         const data = puzzleSchema.parse(req.body);
         const result = await PuzzleModel.createPuzzle(data as any);
-        return res.status(201).json({ message: "Puzzle created", id: Number(result.lastInsertRowid) });
+        return res.status(201).json({ message: "Puzzle created", id: result.lastInsertRowid });
     } catch (error) {
         return res.status(400).json({ message: "Invalid data", error });
     }
@@ -72,7 +128,7 @@ export const createPuzzle = async (req: Request, res: Response) => {
 
 export const updatePuzzle = async (req: Request, res: Response) => {
     try {
-        const id = parseInt(req.params.id as string);
+        const id = req.params.id as string;
         const data = updatePuzzleSchema.parse(req.body);
         await PuzzleModel.updatePuzzle(id, data as any);
         return res.json({ message: "Puzzle updated" });
@@ -86,7 +142,7 @@ export const updatePuzzle = async (req: Request, res: Response) => {
 
 export const deletePuzzle = async (req: Request, res: Response) => {
     try {
-        const id = parseInt(req.params.id as string);
+        const id = req.params.id as string;
         await PuzzleModel.deletePuzzle(id);
         return res.json({ message: "Puzzle deleted" });
     } catch (error) {

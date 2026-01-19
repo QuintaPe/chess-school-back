@@ -108,3 +108,16 @@ export const deleteUser = async (id: string) => {
         args: [id]
     });
 };
+
+export const updateUserStats = async (userId: string, updates: Partial<{ rating: number; puzzles_solved: number; accuracy: number; streak: number; total_games: number; win_rate: number; study_hours: number }>) => {
+    const fields = Object.keys(updates);
+    if (fields.length === 0) return;
+
+    const setClause = fields.map(field => `${field} = ?`).join(', ');
+    const args = [...Object.values(updates), userId];
+
+    await db.execute({
+        sql: `UPDATE user_stats SET ${setClause} WHERE user_id = ?`,
+        args
+    });
+};

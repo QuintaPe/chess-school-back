@@ -1,7 +1,8 @@
 import { db } from "../config/db";
+import { randomUUID } from "crypto";
 
 export interface Puzzle {
-    id?: number;
+    id?: string;
     externalId?: string;
     fen: string;
     solution: string[]; // Sequence of moves
@@ -21,6 +22,8 @@ export const getPuzzles = async (filters: {
     tags?: string[];
     page?: number;
     limit?: number;
+    sort?: string;
+    order?: 'asc' | 'desc';
 }) => {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -36,6 +39,16 @@ export const getPuzzles = async (filters: {
     if (filters.ratingMax) {
         query += " AND rating <= ?";
         args.push(filters.ratingMax);
+    }
+
+    // Sorting
+    if (filters.sort) {
+        const allowedSorts = ['rating', 'popularity', 'nb_plays', 'rating_deviation', 'created_at'];
+        if (allowedSorts.includes(filters.sort)) {
+            query += ` ORDER BY ${filters.sort} ${filters.order === 'desc' ? 'DESC' : 'ASC'}`;
+        }
+    } else {
+        query += " ORDER BY id ASC";
     }
 
     const result = await db.execute({ sql: query, args });
@@ -57,6 +70,9 @@ export const getPuzzles = async (filters: {
     }
 
     const total = rows.length;
+    // Note: Pagination should ideally be in SQL, but since we are doing Tag filtering in JS, we slice here.
+    // If tags are NOT provided, we could paginate in SQL for performance.
+    // For now, keeping it simple as we load all matches then slice.
     const paginatedRows = rows.slice(offset, offset + limit);
 
     return {
@@ -70,7 +86,7 @@ export const getPuzzles = async (filters: {
     };
 };
 
-export const getPuzzleById = async (id: number) => {
+export const getPuzzleById = async (id: string) => {
     const result = await db.execute({
         sql: "SELECT * FROM puzzles WHERE id = ?",
         args: [id]
@@ -91,9 +107,11 @@ export const getPuzzleById = async (id: number) => {
 };
 
 export const createPuzzle = async (puzzle: Puzzle) => {
+    const id = randomUUID();
     const result = await db.execute({
-        sql: `INSERT INTO puzzles (external_id, fen, solution, rating, rating_deviation, popularity, nb_plays, turn, tags, game_url, opening_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO puzzles (id, external_id, fen, solution, rating, rating_deviation, popularity, nb_plays, turn, tags, game_url, opening_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
+            id,
             puzzle.externalId || null,
             puzzle.fen,
             JSON.stringify(puzzle.solution),
@@ -107,10 +125,10 @@ export const createPuzzle = async (puzzle: Puzzle) => {
             JSON.stringify(puzzle.openingTags || [])
         ]
     });
-    return result;
+    return { ...result, lastInsertRowid: id };
 };
 
-export const recordPuzzleSolve = async (userId: string, puzzleId: number, isCorrect: boolean) => {
+export const recordPuzzleSolve = async (userId: string, puzzleId: string, isCorrect: boolean) => {
     await db.execute({
         sql: "INSERT OR REPLACE INTO user_puzzle_history (user_id, puzzle_id, is_correct) VALUES (?, ?, ?)",
         args: [userId, puzzleId, isCorrect ? 1 : 0]
@@ -124,7 +142,7 @@ export const recordPuzzleSolve = async (userId: string, puzzleId: number, isCorr
     }
 };
 
-export const updatePuzzle = async (id: number, updates: Partial<Puzzle>) => {
+export const updatePuzzle = async (id: string, updates: Partial<Puzzle>) => {
     const fields = Object.keys(updates);
     if (fields.length === 0) return;
 
@@ -152,7 +170,7 @@ export const updatePuzzle = async (id: number, updates: Partial<Puzzle>) => {
     });
 };
 
-export const deletePuzzle = async (id: number) => {
+export const deletePuzzle = async (id: string) => {
     await db.execute({
         sql: "DELETE FROM puzzles WHERE id = ?",
         args: [id]

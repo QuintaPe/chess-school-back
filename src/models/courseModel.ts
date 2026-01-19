@@ -1,7 +1,8 @@
 import { db } from "../config/db";
+import { randomUUID } from "crypto";
 
 export interface Course {
-    id?: number;
+    id?: string;
     title: string;
     description?: string;
     level: 'beginner' | 'intermediate' | 'advanced';
@@ -12,8 +13,8 @@ export interface Course {
 }
 
 export interface Lesson {
-    id?: number;
-    course_id: number;
+    id?: string;
+    course_id: string;
     title: string;
     content?: string; // Markdown
     video_url?: string;
@@ -74,7 +75,7 @@ export const getEnrolledCourses = async (userId: string) => {
     }));
 };
 
-export const getCourseById = async (id: number, userId?: string) => {
+export const getCourseById = async (id: string, userId?: string) => {
     const courseRes = await db.execute({
         sql: "SELECT * FROM courses WHERE id = ?",
         args: [id]
@@ -101,15 +102,16 @@ export const getCourseById = async (id: number, userId?: string) => {
 };
 
 export const createCourse = async (course: Course) => {
+    const id = randomUUID();
     const result = await db.execute({
-        sql: `INSERT INTO courses (title, description, level, category, price, thumbnail_url, is_published)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [course.title, course.description || '', course.level, course.category || '', course.price, course.thumbnail_url || '', course.is_published ? 1 : 0]
+        sql: `INSERT INTO courses (id, title, description, level, category, price, thumbnail_url, is_published)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [id, course.title, course.description || '', course.level, course.category || '', course.price, course.thumbnail_url || '', course.is_published ? 1 : 0]
     });
-    return result;
+    return { ...result, lastInsertRowid: id };
 };
 
-export const updateCourse = async (id: number, updates: Partial<Course>) => {
+export const updateCourse = async (id: string, updates: Partial<Course>) => {
     const fields = Object.keys(updates);
     if (fields.length === 0) return;
 
@@ -123,15 +125,16 @@ export const updateCourse = async (id: number, updates: Partial<Course>) => {
 };
 
 export const createLesson = async (lesson: Lesson) => {
+    const id = randomUUID();
     const result = await db.execute({
-        sql: `INSERT INTO lessons (course_id, title, content, video_url, order_index)
-              VALUES (?, ?, ?, ?, ?)`,
-        args: [lesson.course_id, lesson.title, lesson.content || '', lesson.video_url || '', lesson.order_index]
+        sql: `INSERT INTO lessons (id, course_id, title, content, video_url, order_index)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [id, lesson.course_id, lesson.title, lesson.content || '', lesson.video_url || '', lesson.order_index]
     });
-    return result;
+    return { ...result, lastInsertRowid: id };
 };
 
-export const updateLessonOrder = async (lessonId: number, oldIndex: number, newIndex: number, courseId: number) => {
+export const updateLessonOrder = async (lessonId: string, oldIndex: number, newIndex: number, courseId: string) => {
     if (newIndex < oldIndex) {
         await db.execute({
             sql: "UPDATE lessons SET order_index = order_index + 1 WHERE course_id = ? AND order_index >= ? AND order_index < ?",
@@ -149,14 +152,14 @@ export const updateLessonOrder = async (lessonId: number, oldIndex: number, newI
     });
 };
 
-export const enrollUser = async (userId: string, courseId: number) => {
+export const enrollUser = async (userId: string, courseId: string) => {
     await db.execute({
         sql: "INSERT OR IGNORE INTO course_enrollments (user_id, course_id) VALUES (?, ?)",
         args: [userId, courseId]
     });
 };
 
-export const isUserEnrolled = async (userId: string, courseId: number) => {
+export const isUserEnrolled = async (userId: string, courseId: string) => {
     const result = await db.execute({
         sql: "SELECT 1 FROM course_enrollments WHERE user_id = ? AND course_id = ?",
         args: [userId, courseId]
@@ -164,14 +167,14 @@ export const isUserEnrolled = async (userId: string, courseId: number) => {
     return result.rows.length > 0;
 };
 
-export const completeLesson = async (userId: string, lessonId: number) => {
+export const completeLesson = async (userId: string, lessonId: string) => {
     await db.execute({
         sql: "INSERT OR IGNORE INTO user_lesson_progress (user_id, lesson_id) VALUES (?, ?)",
         args: [userId, lessonId]
     });
 };
 
-export const uncompleteLesson = async (userId: string, lessonId: number) => {
+export const uncompleteLesson = async (userId: string, lessonId: string) => {
     await db.execute({
         sql: "DELETE FROM user_lesson_progress WHERE user_id = ? AND lesson_id = ?",
         args: [userId, lessonId]

@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import * as UserModel from '../models/userModel';
 import { z } from 'zod';
 import { syncUserRole } from './discordController';
+import { logActivity } from '../models/activityModel';
+import * as AchievementModel from '../models/achievementModel';
 
 const registerSchema = z.object({
     email: z.string().email(),
@@ -32,6 +34,8 @@ export const register = async (req: Request, res: Response) => {
             subscription_plan: subscription_plan || 'free',
             status: 'active'
         });
+
+        await logActivity('new_user', `Nuevo alumno: ${name} se ha unido al club`);
 
         return res.status(201).json({ message: "User registered successfully", id: user.lastInsertRowid });
     } catch (error: any) {
@@ -93,8 +97,9 @@ export const getStats = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
         const stats = await UserModel.getUserStats(userId);
+        const weeklyActivity: any[] = [];
+        const achievements = await AchievementModel.getUnlockedAchievements(userId);
 
-        // Mocking some data for the charts as specified in requirements
         const response = {
             summary: {
                 currentRating: stats?.rating || 1200,
@@ -109,8 +114,8 @@ export const getStats = async (req: Request, res: Response) => {
             ratingHistory: [
                 { "month": "Ene", "rating": 1200 }
             ],
-            weeklyActivity: [],
-            achievements: []
+            weeklyActivity,
+            achievements
         };
 
         return res.json(response);

@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import * as CourseModel from '../models/courseModel';
 import { z } from 'zod';
+import { logActivity } from '../models/activityModel';
+import { db } from '../config/db';
+import * as UserModel from '../models/userModel';
+import { checkAndUnlockAchievements } from '../models/achievementModel';
 
 const courseSchema = z.object({
     title: z.string(),
@@ -43,7 +47,7 @@ export const listAllCourses = async (req: Request, res: Response) => {
 
 export const getCourse = async (req: Request, res: Response) => {
     try {
-        const id = parseInt(req.params.id as string);
+        const id = req.params.id as string;
         const userId = (req as any).user?.id;
         const course = await CourseModel.getCourseById(id, userId);
         if (!course) return res.status(404).json({ message: "Course not found" });
@@ -68,7 +72,10 @@ export const createCourse = async (req: Request, res: Response) => {
     try {
         const data = courseSchema.parse(req.body);
         const result = await CourseModel.createCourse(data as any);
-        return res.status(201).json({ message: "Course created", id: Number(result.lastInsertRowid) });
+
+        await logActivity('course_created', `Nuevo curso publicado: ${data.title}`);
+
+        return res.status(201).json({ message: "Course created", id: result.lastInsertRowid });
     } catch (error) {
         return res.status(400).json({ message: "Invalid data", error });
     }
@@ -76,7 +83,7 @@ export const createCourse = async (req: Request, res: Response) => {
 
 export const addLesson = async (req: Request, res: Response) => {
     try {
-        const courseId = parseInt(req.params.id as string);
+        const courseId = req.params.id as string;
         const data = lessonSchema.parse(req.body);
         await CourseModel.createLesson({ ...data, course_id: courseId } as any);
         return res.status(201).json({ message: "Lesson added" });
@@ -87,7 +94,7 @@ export const addLesson = async (req: Request, res: Response) => {
 
 export const updateLessonOrder = async (req: Request, res: Response) => {
     try {
-        const lessonId = parseInt(req.params.id as string);
+        const lessonId = req.params.id as string;
         const { newIndex, oldIndex, courseId } = req.body;
         await CourseModel.updateLessonOrder(lessonId, oldIndex, newIndex, courseId);
         return res.json({ message: "Lesson order updated" });
@@ -99,8 +106,24 @@ export const updateLessonOrder = async (req: Request, res: Response) => {
 export const enroll = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
-        const courseId = parseInt(req.params.id as string);
+        const courseId = req.params.id as string;
         await CourseModel.enrollUser(userId, courseId);
+
+        // Log activity
+        const user = await UserModel.findUserById(userId);
+        const course = await CourseModel.getCourseById(courseId) as any;
+        if (user && course) {
+            await logActivity('course_purchased', `El alumno ${(user as any).name} se ha inscrito al curso: ${course.title}`);
+        }
+
+        // Check Achievements
+        const enrollmentCountRes = await db.execute({
+            sql: "SELECT COUNT(*) as count FROM course_enrollments WHERE user_id = ?",
+            args: [userId]
+        });
+        const enrollmentCount = Number(enrollmentCountRes.rows[0]?.count || 0);
+        await checkAndUnlockAchievements(userId, 'course_enroll_total', enrollmentCount);
+
         return res.json({ message: "Enrolled successfully" });
     } catch (error) {
         return res.status(500).json({ message: "Error enrolling" });
@@ -110,7 +133,7 @@ export const enroll = async (req: Request, res: Response) => {
 export const completeLesson = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
-        const lessonId = parseInt(req.params.lessonId as string);
+        const lessonId = req.params.lessonId as string;
         await CourseModel.completeLesson(userId, lessonId);
         return res.json({ success: true, message: "Lesson marked as completed" });
     } catch (error) {
@@ -121,7 +144,7 @@ export const completeLesson = async (req: Request, res: Response) => {
 export const uncompleteLesson = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
-        const lessonId = parseInt(req.params.lessonId as string);
+        const lessonId = req.params.lessonId as string;
         await CourseModel.uncompleteLesson(userId, lessonId);
         return res.json({ success: true, message: "Lesson marked as uncompleted" });
     } catch (error) {

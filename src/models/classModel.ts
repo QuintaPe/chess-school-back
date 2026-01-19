@@ -1,13 +1,15 @@
 import { db } from "../config/db";
+import { randomUUID } from "crypto";
 
 export interface Class {
-    id?: number;
+    id?: string;
     title: string;
     level: 'beginner' | 'intermediate' | 'advanced';
     start_time: string;
     end_time?: string;
     capacity: number;
     teacher_id?: string;
+    group_id?: string | null;
     status: 'scheduled' | 'live' | 'completed' | 'canceled';
     meeting_link?: string;
     recording_url?: string;
@@ -36,7 +38,7 @@ export const getClasses = async (filters: { level?: string; status?: string; use
     return result.rows;
 };
 
-export const getClassById = async (id: number) => {
+export const getClassById = async (id: string) => {
     const result = await db.execute({
         sql: "SELECT * FROM classes WHERE id = ?",
         args: [id]
@@ -44,7 +46,7 @@ export const getClassById = async (id: number) => {
     return result.rows[0];
 };
 
-export const getRegistrationCount = async (classId: number) => {
+export const getRegistrationCount = async (classId: string) => {
     const result = await db.execute({
         sql: "SELECT COUNT(*) as count FROM class_registrations WHERE class_id = ?",
         args: [classId]
@@ -52,7 +54,7 @@ export const getRegistrationCount = async (classId: number) => {
     return (result.rows[0] as any).count;
 };
 
-export const registerUser = async (userId: string, classId: number) => {
+export const registerUser = async (userId: string, classId: string) => {
     await db.execute({
         sql: "INSERT INTO class_registrations (user_id, class_id) VALUES (?, ?)",
         args: [userId, classId]
@@ -60,16 +62,19 @@ export const registerUser = async (userId: string, classId: number) => {
 };
 
 export const createClass = async (cls: Class) => {
+    const id = randomUUID();
     const result = await db.execute({
-        sql: `INSERT INTO classes (title, level, start_time, end_time, capacity, teacher_id, status, meeting_link, recording_url, platform, video_url)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO classes (id, title, level, start_time, end_time, capacity, teacher_id, group_id, status, meeting_link, recording_url, platform, video_url)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
+            id,
             cls.title,
             cls.level,
             cls.start_time,
             cls.end_time || null,
             cls.capacity,
             cls.teacher_id || null,
+            cls.group_id || null,
             cls.status,
             cls.meeting_link || null,
             cls.recording_url || null,
@@ -77,7 +82,7 @@ export const createClass = async (cls: Class) => {
             cls.video_url || null
         ]
     });
-    return result;
+    return { ...result, lastInsertRowid: id };
 };
 
 export const getDiscordSettings = async () => {
@@ -96,7 +101,7 @@ export const updateDiscordSetting = async (key: string, value: string) => {
     });
 };
 
-export const updateClass = async (id: number, updates: Partial<Class>) => {
+export const updateClass = async (id: string, updates: Partial<Class>) => {
     const fields = Object.keys(updates);
     if (fields.length === 0) return;
 
@@ -109,7 +114,7 @@ export const updateClass = async (id: number, updates: Partial<Class>) => {
     });
 };
 
-export const deleteClass = async (id: number) => {
+export const deleteClass = async (id: string) => {
     await db.execute({
         sql: "DELETE FROM classes WHERE id = ?",
         args: [id]

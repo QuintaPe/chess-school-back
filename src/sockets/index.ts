@@ -13,6 +13,17 @@ interface Participant {
 // In-memory storage for participants (In production, use Redis)
 const participants: Map<string, Participant> = new Map();
 
+interface ClassState {
+    fen: string;
+    turn: 'w' | 'b';
+    lastMove?: any;
+    history: string[]; // FEN history
+    moves: Array<{ num: number; white: string; black?: string; }>; // Move notation
+}
+
+// Store basic state for each class so late joiners get current board
+const classStates: Map<string, ClassState> = new Map();
+
 export const setupSocketIO = (io: Server) => {
     io.on('connection', (socket: Socket) => {
         console.log('User connected to socket:', socket.id);
@@ -44,6 +55,20 @@ export const setupSocketIO = (io: Server) => {
                 const roomParticipants = Array.from(participants.values()).filter(p => p.classId === classId);
                 io.to(classId).emit('participants-update', roomParticipants);
 
+                // Send current board state to the new joiner
+                const currentState = classStates.get(classId);
+                if (currentState) {
+                    socket.emit('initial-state', currentState);
+                } else {
+                    // Start position if no state exists
+                    socket.emit('initial-state', {
+                        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                        turn: 'w',
+                        history: ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'],
+                        moves: []
+                    });
+                }
+
             } catch (error) {
                 console.error("Socket Auth Error:", error);
                 socket.emit('error', { message: 'Authentication failed' });
@@ -63,6 +88,28 @@ export const setupSocketIO = (io: Server) => {
 
             // Permission Check
             if (participant.hasControl) {
+                // Update state
+                // Update state
+                const currentState: ClassState = classStates.get(String(data.classId)) || {
+                    fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                    turn: 'w',
+                    history: ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'],
+                    moves: []
+                };
+
+                currentState.fen = data.fen;
+                currentState.turn = data.turn as 'w' | 'b';
+                currentState.lastMove = data.move;
+                if (!currentState.history) currentState.history = [];
+                // Store fen history for replay
+                currentState.history.push(data.fen);
+
+                if (data.newMoves) {
+                    currentState.moves = data.newMoves;
+                }
+
+                classStates.set(String(data.classId), currentState);
+
                 io.to(String(data.classId)).emit('move', data);
             } else {
                 console.warn(`User ${participant.name} tried to move without control.`);
