@@ -2,322 +2,265 @@ import { db } from "../config/db";
 
 export const initDB = async () => {
     try {
-        // 1. USERS Table
+        // await db.execute("PRAGMA foreign_keys = OFF");
+        // const tables = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+        // for (const row of tables.rows) {
+        //     await db.execute(`DROP TABLE IF EXISTS ${row.name}`);
+        // }
+        // await db.execute("PRAGMA foreign_keys = ON");
+        // return;
+
+        // 1. Núcleo de Usuarios y Acceso
         await db.execute(`
             CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY, -- UUID
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
                 name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                role TEXT CHECK(role IN ('student', 'teacher', 'admin')) DEFAULT 'student',
-                status TEXT CHECK(status IN ('active', 'inactive', 'pending')) DEFAULT 'active',
-                subscription_plan TEXT CHECK(subscription_plan IN ('free', 'premium')) DEFAULT 'free',
                 avatar_url TEXT,
-                bio TEXT,
-                discord_id TEXT,
-                discord_username TEXT,
-                discord_access_token TEXT,
-                discord_refresh_token TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                status TEXT NOT NULL CHECK(status IN ('active', 'banned', 'pending')) DEFAULT 'active',
+                last_login_at DATETIME,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
-        // Migration for Users
-        try { await db.execute("ALTER TABLE users ADD COLUMN discord_id TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE users ADD COLUMN discord_username TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE users ADD COLUMN discord_access_token TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE users ADD COLUMN discord_refresh_token TEXT"); } catch (e) { }
-
-        // 2. COURSES Table
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS courses (
+            CREATE TABLE IF NOT EXISTS roles (
                 id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT,
-                level TEXT CHECK(level IN ('beginner', 'intermediate', 'advanced')),
-                category TEXT,
-                price REAL DEFAULT 0.00,
-                thumbnail_url TEXT,
-                is_published BOOLEAN DEFAULT FALSE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                name TEXT NOT NULL UNIQUE,
+                role_type TEXT NOT NULL CHECK(role_type IN ('admin', 'membership'))
             )
         `);
 
-        // 3. LESSONS Table
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS lessons (
+            CREATE TABLE IF NOT EXISTS permissions (
                 id TEXT PRIMARY KEY,
-                course_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                content TEXT, -- Markdown content
-                video_url TEXT,
-                order_index INTEGER DEFAULT 0,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+                code TEXT NOT NULL UNIQUE,
+                description TEXT
             )
         `);
 
-        // 4. STUDENT GROUPS Table
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS student_groups (
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                role_id TEXT NOT NULL,
+                permission_id TEXT NOT NULL,
+                PRIMARY KEY (role_id, permission_id),
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+                FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+            )
+        `);
+
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS user_roles (
+                user_id TEXT NOT NULL,
+                role_id TEXT NOT NULL,
+                PRIMARY KEY (user_id, role_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+            )
+        `);
+
+        // 2. Monetización
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS products (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                teacher_id TEXT,
-                description TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+                product_type TEXT NOT NULL CHECK(product_type IN ('course_lifetime', 'subscription', 'bundle')),
+                price REAL NOT NULL,
+                currency TEXT NOT NULL,
+                external_reference TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1
             )
         `);
 
-        // 5. GROUP MEMBERS Table (Many-to-Many)
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS group_members (
-                group_id TEXT,
-                user_id TEXT,
-                joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (group_id, user_id),
-                FOREIGN KEY (group_id) REFERENCES student_groups(id) ON DELETE CASCADE,
+            CREATE TABLE IF NOT EXISTS product_resources (
+                id TEXT PRIMARY KEY,
+                product_id TEXT NOT NULL,
+                resource_type TEXT NOT NULL CHECK(resource_type IN ('course', 'role')),
+                resource_id TEXT NOT NULL,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+        `);
+
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS user_entitlements (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                resource_type TEXT NOT NULL CHECK(resource_type IN ('course', 'role')),
+                resource_id TEXT NOT NULL,
+                access_mode TEXT NOT NULL CHECK(access_mode IN ('lifetime', 'subscription')),
+                starts_at DATETIME NOT NULL,
+                expires_at DATETIME,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
 
-        // 6. CLASSES Table (with group_id support)
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS classes (
+            CREATE TABLE IF NOT EXISTS transactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                gateway_name TEXT NOT NULL,
+                external_tx_id TEXT,
+                amount_paid REAL NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('completed', 'refunded', 'failed', 'pending')),
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            )
+        `);
+
+        // 3. Contenido
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS courses (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
-                level TEXT CHECK(level IN ('beginner', 'intermediate', 'advanced')),
-                start_time DATETIME NOT NULL,
-                teacher_id TEXT,
-                group_id TEXT, -- Optional: Associate class with a specific group
-                status TEXT CHECK(status IN ('scheduled', 'live', 'completed', 'canceled')) DEFAULT 'scheduled',
-                meeting_link TEXT,
-                video_url TEXT,
-                recurring_days TEXT, -- JSON array of numbers
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (teacher_id) REFERENCES users(id),
-                FOREIGN KEY (group_id) REFERENCES student_groups(id) ON DELETE SET NULL
+                slug TEXT NOT NULL UNIQUE,
+                level TEXT NOT NULL CHECK(level IN ('beginner', 'intermediate', 'advanced')),
+                is_published INTEGER NOT NULL DEFAULT 0
             )
         `);
 
-        // Migrations for Classes
-        try { await db.execute("ALTER TABLE classes ADD COLUMN group_id TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE classes ADD COLUMN video_url TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE classes ADD COLUMN recurring_days TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE classes ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) { }
-
-
-        // 7. CLASS REGISTRATIONS Table
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS class_registrations (
-                user_id TEXT NOT NULL,
-                class_id TEXT NOT NULL,
-                registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, class_id),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
-            )
-        `);
-
-        // 8. PUZZLES Table
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS puzzles (
+            CREATE TABLE IF NOT EXISTS modules (
                 id TEXT PRIMARY KEY,
-                external_id TEXT,
-                fen TEXT NOT NULL,
-                solution TEXT NOT NULL, -- Stored as JSON string array
-                rating INTEGER DEFAULT 800,
-                rating_deviation INTEGER,
-                popularity INTEGER,
-                nb_plays INTEGER,
-                turn TEXT CHECK(turn IN ('w', 'b')),
-                tags TEXT, -- Stored as JSON string array (Themes in CSV)
-                game_url TEXT,
-                opening_tags TEXT, -- Stored as JSON string array
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                course_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                order_index INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
             )
         `);
 
-        // Migration for Puzzles (ensure columns exist if table was created with an old schema)
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN external_id TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN turn TEXT CHECK(turn IN ('w', 'b'))"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN tags TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN rating INTEGER DEFAULT 800"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN rating_deviation INTEGER"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN popularity INTEGER"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN nb_plays INTEGER"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN game_url TEXT"); } catch (e) { }
-        try { await db.execute("ALTER TABLE puzzles ADD COLUMN opening_tags TEXT"); } catch (e) { }
-
-        // 9. USER PROGRESS Tables
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS user_lesson_progress (
+            CREATE TABLE IF NOT EXISTS lessons (
+                id TEXT PRIMARY KEY,
+                module_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                lesson_type TEXT NOT NULL CHECK(lesson_type IN ('video', 'article', 'interactive_board')),
+                content_md TEXT,
+                video_url TEXT,
+                order_index INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+            )
+        `);
+
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS user_progress (
                 user_id TEXT NOT NULL,
                 lesson_id TEXT NOT NULL,
-                completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL CHECK(status IN ('started', 'completed')),
+                completed_at DATETIME,
                 PRIMARY KEY (user_id, lesson_id),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
             )
         `);
 
-        // Migration: Rename old table if exists
-        try {
-            await db.execute("INSERT INTO user_lesson_progress (user_id, lesson_id, completed_at) SELECT user_id, lesson_id, completed_at FROM user_lessons_completed");
-            await db.execute("DROP TABLE user_lessons_completed");
-        } catch (e) {
-            // Table doesn't exist or already migrated
-        }
+        // 4. Puzzles
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS puzzles (
+                id TEXT PRIMARY KEY,
+                external_id TEXT,
+                initial_fen TEXT NOT NULL,
+                solution_moves TEXT NOT NULL,
+                rating INTEGER NOT NULL DEFAULT 1200,
+                themes TEXT
+            )
+        `);
 
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS user_puzzle_history (
+            CREATE TABLE IF NOT EXISTS puzzle_attempts (
+                id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 puzzle_id TEXT NOT NULL,
-                solved_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                is_correct BOOLEAN,
-                PRIMARY KEY (user_id, puzzle_id),
+                solved INTEGER NOT NULL,
+                time_spent INTEGER,
+                rating_delta INTEGER,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
             )
         `);
 
+        // 5. Clases
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS user_stats (
-                user_id TEXT PRIMARY KEY,
-                rating INTEGER DEFAULT 1200,
-                puzzles_solved INTEGER DEFAULT 0,
-                accuracy REAL DEFAULT 0.0,
-                streak INTEGER DEFAULT 0,
-                total_games INTEGER DEFAULT 0,
-                win_rate REAL DEFAULT 0.0,
-                study_hours REAL DEFAULT 0.0,
+            CREATE TABLE IF NOT EXISTS groups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                teacher_id TEXT,
+                level_tag TEXT,
+                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        `);
+
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS group_members (
+                group_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
 
-        // 10. COURSE ENROLLMENTS Table
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS course_enrollments (
-                user_id TEXT NOT NULL,
-                course_id TEXT NOT NULL,
-                enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, course_id),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-            )
-        `);
-
-        // 11. DISCORD SETTINGS Table
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS discord_settings (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        `);
-
-        // Initial settings
-        try {
-            await db.execute("INSERT OR IGNORE INTO discord_settings (key, value) VALUES ('webhook_url', '')");
-            await db.execute("INSERT OR IGNORE INTO discord_settings (key, value) VALUES ('guild_id', '')");
-            await db.execute("INSERT OR IGNORE INTO discord_settings (key, value) VALUES ('premium_role_id', '')");
-        } catch (e) { }
-
-        // 12. DAILY PUZZLES Table
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS daily_puzzles (
+            CREATE TABLE IF NOT EXISTS live_classes (
                 id TEXT PRIMARY KEY,
-                puzzle_id TEXT NOT NULL,
-                date DATE NOT NULL UNIQUE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (puzzle_id) REFERENCES puzzles(id) ON DELETE CASCADE
+                title TEXT NOT NULL,
+                teacher_id TEXT,
+                scheduled_at DATETIME NOT NULL,
+                duration_mins INTEGER NOT NULL,
+                room_url TEXT,
+                status TEXT NOT NULL CHECK(status IN ('scheduled', 'live', 'finished')),
+                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
             )
         `);
 
-        // Create index for fast date lookups
-        try {
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_puzzles_date ON daily_puzzles(date)");
-        } catch (e) { }
-
-        // 13. DAILY PUZZLE ATTEMPTS Table
         await db.execute(`
-            CREATE TABLE IF NOT EXISTS daily_puzzle_attempts (
-                id TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS live_attendance (
+                live_class_id TEXT NOT NULL,
                 user_id TEXT NOT NULL,
-                daily_puzzle_id TEXT NOT NULL,
-                solved BOOLEAN DEFAULT 0,
-                attempts INTEGER DEFAULT 0,
-                time_spent INTEGER, -- Time in seconds
-                completed_at DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (daily_puzzle_id) REFERENCES daily_puzzles(id) ON DELETE CASCADE,
-                UNIQUE(user_id, daily_puzzle_id)
+                joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (live_class_id, user_id),
+                FOREIGN KEY (live_class_id) REFERENCES live_classes(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
 
-        // Create indexes for frequent queries
-        try {
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_puzzle_attempts_user ON daily_puzzle_attempts(user_id)");
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_puzzle_attempts_daily_puzzle ON daily_puzzle_attempts(daily_puzzle_id)");
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_daily_puzzle_attempts_solved ON daily_puzzle_attempts(solved)");
-        } catch (e) { }
-
-        // 14. ACTIVITY LOG Table
+        // 6. Auditoria
         await db.execute(`
             CREATE TABLE IF NOT EXISTS activity_log (
                 id TEXT PRIMARY KEY,
-                type TEXT NOT NULL, -- e.g., 'new_user', 'class_created', 'course_purchased'
-                message TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                user_id TEXT,
+                action TEXT NOT NULL,
+                metadata TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             )
         `);
 
-        // 15. ACHIEVEMENTS Table
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS achievements (
-                id TEXT PRIMARY KEY, -- String ID like 'first_puzzle', 'streak_7'
-                name TEXT NOT NULL,
-                description TEXT NOT NULL,
-                icon_url TEXT,
-                criteria_type TEXT NOT NULL, -- 'puzzle_solve_total', 'puzzle_streak', 'course_enroll_total'
-                criteria_value INTEGER NOT NULL
-            )
-        `);
+        // Indexes
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_user_entitlements_user ON user_entitlements(user_id)");
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_user_progress_user ON user_progress(user_id)");
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_user ON puzzle_attempts(user_id)");
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)");
 
-        // 16. USER ACHIEVEMENTS Table
-        await db.execute(`
-            CREATE TABLE IF NOT EXISTS user_achievements (
-                user_id TEXT NOT NULL,
-                achievement_id TEXT NOT NULL,
-                unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, achievement_id),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE
-            )
-        `);
+        // Default Roles
+        await db.execute({
+            sql: "INSERT OR IGNORE INTO roles (id, name, role_type) VALUES (?, ?, ?)",
+            args: ['role_admin', 'Admin', 'admin']
+        });
+        await db.execute({
+            sql: "INSERT OR IGNORE INTO roles (id, name, role_type) VALUES (?, ?, ?)",
+            args: ['role_coach', 'Coach', 'admin']
+        });
+        await db.execute({
+            sql: "INSERT OR IGNORE INTO roles (id, name, role_type) VALUES (?, ?, ?)",
+            args: ['role_student', 'Student', 'membership']
+        });
 
-        // Initial Achievements Seed
-        const initialAchievements = [
-            ['first_puzzle', 'Primer Paso', 'Resuelve tu primer problema del día', null, 'puzzle_solve_total', 1],
-            ['puzzles_10', 'Estratega Novato', 'Resuelve 10 problemas del día', null, 'puzzle_solve_total', 10],
-            ['puzzles_50', 'Maestro de Tácticas', 'Resuelve 50 problemas del día', null, 'puzzle_solve_total', 50],
-            ['streak_7', 'Siete de Suerte', 'Mantén una racha de 7 días resolviendo el problema del día', null, 'puzzle_streak', 7],
-            ['streak_30', 'Constancia de Acero', 'Mantén una racha de 30 días resolviendo el problema del día', null, 'puzzle_streak', 30],
-            ['course_enroll_1', 'Estudiante Dedicado', 'Inscríbete en tu primer curso', null, 'course_enroll_total', 1],
-        ];
-
-        for (const [id, name, desc, icon, type, val] of initialAchievements) {
-            try {
-                await db.execute({
-                    sql: "INSERT OR IGNORE INTO achievements (id, name, description, icon_url, criteria_type, criteria_value) VALUES (?, ?, ?, ?, ?, ?)",
-                    args: [id, name, desc, icon, type, val]
-                });
-            } catch (e) { }
-        }
-
-        console.log("Database tables initialized according to new requirements (including achievements)");
-
+        console.log("Database tables initialized successfully (Reino Ajedrez v1)");
     } catch (error) {
         console.error("Error initializing database:", error);
     }

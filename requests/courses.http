@@ -1,0 +1,46 @@
+@baseUrl = http://localhost:3000
+@token = {{login.response.body.token}}
+
+### Login as Admin (required for some operations)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "admin@example.com",
+    "password": "adminpassword"
+}
+
+### Create a Course (Admin)
+# @name create_course
+POST {{baseUrl}}/courses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "title": "Mastering the Opening",
+    "slug": "mastering-opening",
+    "level": "beginner",
+    "is_published": true
+}
+
+### List All Courses
+GET {{baseUrl}}/courses
+
+### Get Course Details
+GET {{baseUrl}}/courses/1
+
+### Enroll in Course
+POST {{baseUrl}}/courses/1/enroll
+Authorization: Bearer {{token}}
+
+### Add Lesson to Course (Admin)
+POST {{baseUrl}}/courses/1/lessons
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "title": "e4 Openings",
+    "lesson_type": "article",
+    "content_md": "# e4 Openings\nStart with e4."
+}

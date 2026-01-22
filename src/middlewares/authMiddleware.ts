@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import * as UserRoleModel from '../models/auth/userRolesModel';
 
 export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -9,9 +10,17 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-        (req as any).user = decoded;
-        next();
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
+        const userId = decoded?.user_id;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized: Invalid token payload" });
+        }
+
+        void (async () => {
+            const roles = await UserRoleModel.getUserRoles(userId);
+            (req as any).user = { id: userId, roles };
+            next();
+        })().catch(() => res.status(401).json({ message: "Unauthorized: Invalid or expired token" }));
     } catch (err) {
         return res.status(401).json({ message: "Unauthorized: Invalid or expired token" });
     }
@@ -23,8 +32,15 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
         return next();
     }
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-        (req as any).user = decoded;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
+        const userId = decoded?.user_id;
+        if (!userId) return next();
+        void (async () => {
+            const roles = await UserRoleModel.getUserRoles(userId);
+            (req as any).user = { id: userId, roles };
+            next();
+        })();
+        return;
     } catch (err) {
         // Continue without user if token is invalid
     }
@@ -33,7 +49,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
 
 export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
-    if (!user || user.role !== 'admin') {
+    if (!user || !user.roles.includes('role_admin')) {
         return res.status(403).json({ message: "Forbidden: Admin access required" });
     }
     next();
@@ -41,7 +57,7 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
 
 export const isStaff = (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
-    if (!user || (user.role !== 'admin' && user.role !== 'teacher')) {
+    if (!user || (!user.roles.includes('role_admin') && !user.roles.includes('role_coach'))) {
         return res.status(403).json({ message: "Forbidden: Staff access required" });
     }
     next();

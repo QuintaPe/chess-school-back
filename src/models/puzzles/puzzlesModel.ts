@@ -1,25 +1,19 @@
-import { db } from "../config/db";
+import { db } from "../../config/db";
 import { randomUUID } from "crypto";
 
 export interface Puzzle {
     id?: string;
     externalId?: string;
-    fen: string;
-    solution: string[]; // Sequence of moves
+    initial_fen: string;
+    solution_moves: string[];
     rating: number;
-    ratingDeviation?: number;
-    popularity?: number;
-    nbPlays?: number;
-    turn: 'w' | 'b';
-    tags: string[]; // Themes
-    gameUrl?: string;
-    openingTags?: string[];
+    themes: string[];
 }
 
 export const getPuzzles = async (filters: {
     ratingMin?: number;
     ratingMax?: number;
-    tags?: string[];
+    themes?: string[];
     page?: number;
     limit?: number;
     sort?: string;
@@ -41,9 +35,8 @@ export const getPuzzles = async (filters: {
         args.push(filters.ratingMax);
     }
 
-    // Sorting
     if (filters.sort) {
-        const allowedSorts = ['rating', 'popularity', 'nb_plays', 'rating_deviation', 'created_at'];
+        const allowedSorts = ['rating', 'id'];
         if (allowedSorts.includes(filters.sort)) {
             query += ` ORDER BY ${filters.sort} ${filters.order === 'desc' ? 'DESC' : 'ASC'}`;
         }
@@ -53,26 +46,19 @@ export const getPuzzles = async (filters: {
 
     const result = await db.execute({ sql: query, args });
 
-    // Simple filter for tags in JS for now as SQLite doesn't have native JSON array search without extensions
     let rows = result.rows.map((row: any) => ({
         ...row,
         externalId: row.external_id,
-        solution: JSON.parse(row.solution),
-        tags: JSON.parse(row.tags || '[]'),
-        openingTags: JSON.parse(row.opening_tags || '[]'),
-        ratingDeviation: row.rating_deviation,
-        nbPlays: row.nb_plays,
-        gameUrl: row.game_url
+        initial_fen: row.initial_fen,
+        solution_moves: JSON.parse(row.solution_moves),
+        themes: JSON.parse(row.themes || '[]'),
     }));
 
-    if (filters.tags && filters.tags.length > 0) {
-        rows = rows.filter(r => filters.tags!.every(t => r.tags.includes(t)));
+    if (filters.themes && filters.themes.length > 0) {
+        rows = rows.filter(r => filters.themes!.every(t => r.themes.includes(t)));
     }
 
     const total = rows.length;
-    // Note: Pagination should ideally be in SQL, but since we are doing Tag filtering in JS, we slice here.
-    // If tags are NOT provided, we could paginate in SQL for performance.
-    // For now, keeping it simple as we load all matches then slice.
     const paginatedRows = rows.slice(offset, offset + limit);
 
     return {
@@ -97,49 +83,26 @@ export const getPuzzleById = async (id: string) => {
     return {
         ...row,
         externalId: row.external_id,
-        solution: JSON.parse(row.solution),
-        tags: JSON.parse(row.tags || '[]'),
-        openingTags: JSON.parse(row.opening_tags || '[]'),
-        ratingDeviation: row.rating_deviation,
-        nbPlays: row.nb_plays,
-        gameUrl: row.game_url
+        initial_fen: row.initial_fen,
+        solution_moves: JSON.parse(row.solution_moves),
+        themes: JSON.parse(row.themes || '[]')
     };
 };
 
 export const createPuzzle = async (puzzle: Puzzle) => {
     const id = randomUUID();
     const result = await db.execute({
-        sql: `INSERT INTO puzzles (id, external_id, fen, solution, rating, rating_deviation, popularity, nb_plays, turn, tags, game_url, opening_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO puzzles (id, external_id, initial_fen, solution_moves, rating, themes) VALUES (?, ?, ?, ?, ?, ?)`,
         args: [
             id,
             puzzle.externalId || null,
-            puzzle.fen,
-            JSON.stringify(puzzle.solution),
+            puzzle.initial_fen,
+            JSON.stringify(puzzle.solution_moves),
             puzzle.rating,
-            puzzle.ratingDeviation || null,
-            puzzle.popularity || null,
-            puzzle.nbPlays || null,
-            puzzle.turn,
-            JSON.stringify(puzzle.tags || []),
-            puzzle.gameUrl || null,
-            JSON.stringify(puzzle.openingTags || [])
+            JSON.stringify(puzzle.themes || [])
         ]
     });
     return { ...result, lastInsertRowid: id };
-};
-
-export const recordPuzzleSolve = async (userId: string, puzzleId: string, isCorrect: boolean) => {
-    await db.execute({
-        sql: "INSERT OR REPLACE INTO user_puzzle_history (user_id, puzzle_id, is_correct) VALUES (?, ?, ?)",
-        args: [userId, puzzleId, isCorrect ? 1 : 0]
-    });
-
-    if (isCorrect) {
-        await db.execute({
-            sql: "UPDATE user_stats SET puzzles_solved = puzzles_solved + 1 WHERE user_id = ?",
-            args: [userId]
-        });
-    }
 };
 
 export const updatePuzzle = async (id: string, updates: Partial<Puzzle>) => {
@@ -148,16 +111,12 @@ export const updatePuzzle = async (id: string, updates: Partial<Puzzle>) => {
 
     const mappedFields = fields.map(field => {
         if (field === 'externalId') return 'external_id';
-        if (field === 'ratingDeviation') return 'rating_deviation';
-        if (field === 'nbPlays') return 'nb_plays';
-        if (field === 'gameUrl') return 'game_url';
-        if (field === 'openingTags') return 'opening_tags';
         return field;
     });
 
     const args = fields.map(field => {
         const val = (updates as any)[field];
-        if (field === 'solution' || field === 'tags' || field === 'openingTags') return JSON.stringify(val || []);
+        if (field === 'solution_moves' || field === 'themes') return JSON.stringify(val || []);
         return val;
     });
     args.push(id);

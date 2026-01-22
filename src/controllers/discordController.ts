@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import * as UserModel from '../models/userModel';
-import * as ClassModel from '../models/classModel'; // For settings
+import * as UserModel from '../models/auth/userModel';
+import * as ClassModel from '../models/classes/liveClassesModel'; // For settings
 
 
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;

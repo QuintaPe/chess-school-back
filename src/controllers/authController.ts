@@ -1,23 +1,20 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import * as UserModel from '../models/userModel';
+import * as UserModel from '../models/auth/userModel';
+import * as UserRoleModel from '../models/auth/userRolesModel';
 import { z } from 'zod';
-import { syncUserRole } from './discordController';
-import { logActivity } from '../models/activityModel';
-import * as AchievementModel from '../models/achievementModel';
+import { logActivity } from '../models/audit/activityLogModel';
 
 const registerSchema = z.object({
     email: z.string().email(),
     password: z.string().min(6),
     name: z.string(),
-    role: z.enum(['student', 'teacher', 'admin']).optional(),
-    subscription_plan: z.enum(['free', 'premium']).optional(),
 });
 
 export const register = async (req: Request, res: Response) => {
     try {
-        const { email, password, name, role, subscription_plan } = registerSchema.parse(req.body);
+        const { email, password, name } = registerSchema.parse(req.body);
 
         const existingUser = await UserModel.findUserByEmail(email);
         if (existingUser) {
@@ -28,14 +25,14 @@ export const register = async (req: Request, res: Response) => {
 
         const user = await UserModel.createUser({
             email,
-            password: hashedPassword,
             name,
-            role: role || 'student',
-            subscription_plan: subscription_plan || 'free',
+            password_hash: hashedPassword,
             status: 'active'
         });
 
-        await logActivity('new_user', `Nuevo alumno: ${name} se ha unido al club`);
+        await UserRoleModel.assignRoleToUser(user.lastInsertRowid as string, 'role_student');
+
+        await logActivity('new_user', `Nuevo usuario: ${name} se ha unido al club`);
 
         return res.status(201).json({ message: "User registered successfully", id: user.lastInsertRowid });
     } catch (error: any) {
@@ -54,14 +51,15 @@ export const login = async (req: Request, res: Response) => {
         const { email, password } = req.body;
         const user: any = await UserModel.findUserByEmail(email);
 
-        if (!user || !(await bcrypt.compare(password, user.password))) {
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
+        await UserModel.updateLastLogin(user.id);
+        const roles = await UserRoleModel.getUserRoles(user.id);
+
         const token = jwt.sign({
-            id: user.id,
-            role: user.role,
-            subscription_plan: user.subscription_plan
+            user_id: user.id
         }, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
 
         return res.json({
@@ -70,8 +68,7 @@ export const login = async (req: Request, res: Response) => {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: user.role,
-                subscription_plan: user.subscription_plan,
+                roles,
                 avatar_url: user.avatar_url
             }
         });
@@ -86,61 +83,24 @@ export const getMe = async (req: Request, res: Response) => {
         const user = await UserModel.findUserById(userId);
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        const { password, ...userWithoutPassword } = user as any;
-        return res.json(userWithoutPassword);
+        const { password_hash, ...userWithoutPassword } = user as any;
+        const roles = await UserRoleModel.getUserRoles(userId);
+        return res.json({ ...userWithoutPassword, roles });
     } catch (error) {
         return res.status(500).json({ message: "Error fetching profile" });
     }
 };
 
-export const getStats = async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user.id;
-        const stats = await UserModel.getUserStats(userId);
-        const weeklyActivity: any[] = [];
-        const achievements = await AchievementModel.getUnlockedAchievements(userId);
-
-        const response = {
-            summary: {
-                currentRating: stats?.rating || 1200,
-                ratingChange: 0,
-                puzzlesSolved: stats?.puzzles_solved || 0,
-                winRate: stats?.win_rate || 0,
-                streak: stats?.streak || 0,
-                accuracy: stats?.accuracy || 0,
-                studyHours: stats?.study_hours || 0,
-                totalGames: stats?.total_games || 0
-            },
-            ratingHistory: [
-                { "month": "Ene", "rating": 1200 }
-            ],
-            weeklyActivity,
-            achievements
-        };
-
-        return res.json(response);
-    } catch (error) {
-        return res.status(500).json({ message: "Error fetching stats" });
-    }
-};
-
-
 export const updateProfile = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
         const updates = req.body;
-        // Restrict some fields if not admin?
         delete (updates as any).role;
+        delete (updates as any).roles;
+        delete (updates as any).password_hash;
+        delete (updates as any).password;
 
         await UserModel.updateUser(userId, updates);
-
-        // Sync Discord role if subscription plan changed
-        if (updates.subscription_plan) {
-            const user = await UserModel.findUserById(userId);
-            if (user) {
-                await syncUserRole(user);
-            }
-        }
 
         return res.json({ message: "Profile updated" });
     } catch (error) {
@@ -167,13 +127,23 @@ export const adminUpdateUser = async (req: Request, res: Response) => {
         const id = req.params.id as string;
         const updates = req.body;
 
-        await UserModel.updateUser(id, updates);
-
-        // Sync Discord if needed
-        if (updates.subscription_plan) {
-            const user = await UserModel.findUserById(id);
-            if (user) await syncUserRole(user);
+        if (updates.roles && Array.isArray(updates.roles)) {
+            const currentRoles = await UserRoleModel.listUserRoleIds(id);
+            for (const role of currentRoles) {
+                await UserRoleModel.removeRoleFromUser(id, role);
+            }
+            for (const role of updates.roles) {
+                await UserRoleModel.assignRoleToUser(id, role);
+            }
+            delete updates.roles;
         }
+
+        // Remove legacy role field if present to avoid SQL error
+        if ('role' in updates) {
+            delete (updates as any).role;
+        }
+
+        await UserModel.updateUser(id, updates);
 
         return res.json({ message: "User updated by admin" });
     } catch (error) {

@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:3000
+@token = {{login.response.body.token}}
+
+### Login as Teacher
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "teacher@example.com",
+    "password": "password123"
+}
+
+### Create Student Group
+# @name create_group
+POST {{baseUrl}}/student-groups
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "name": "Advanced Students A",
+    "level_tag": "advanced"
+}
+
+### List Groups
+GET {{baseUrl}}/student-groups
+Authorization: Bearer {{token}}
+
+### Add Member to Group
+POST {{baseUrl}}/student-groups/{{create_group.response.body.id}}/members
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "user_id": "student_uuid_here"
+}

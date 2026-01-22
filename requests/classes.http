@@ -1,0 +1,33 @@
+@baseUrl = http://localhost:3000
+@token = {{login.response.body.token}}
+
+### Login (Teacher/Admin for creating)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "teacher@example.com",
+    "password": "password123"
+}
+
+### Create a Class
+# @name create_class
+POST {{baseUrl}}/classes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "title": "Live Tactics Session",
+    "level": "intermediate",
+    "start_time": "2024-12-01T18:00:00Z",
+    "duration_mins": 60,
+    "capacity": 20
+}
+
+### List Classes
+GET {{baseUrl}}/classes
+
+### Register for Class
+POST {{baseUrl}}/classes/1/register
+Authorization: Bearer {{token}}

@@ -34,37 +34,6 @@ const options: swaggerJSDoc.Options = {
                         name: { type: 'string', example: 'Juan Pérez' },
                         email: { type: 'string', format: 'email', example: 'juan@example.com' },
                         role: { type: 'string', enum: ['student', 'teacher', 'admin'], example: 'student' },
-                        subscription_plan: { type: 'string', enum: ['free', 'premium'], example: 'free' },
-                    },
-                },
-                DailyPuzzle: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'integer' },
-                        dailyPuzzleId: { type: 'integer' },
-                        date: { type: 'string', format: 'date' },
-                        fen: { type: 'string' },
-                        solution: { type: 'array', items: { type: 'string' } },
-                        difficulty: { type: 'string' },
-                        userAttempt: {
-                            type: 'object',
-                            nullable: true,
-                            properties: {
-                                solved: { type: 'boolean' },
-                                attempts: { type: 'integer' },
-                                timeSpent: { type: 'integer' },
-                            },
-                        },
-                    },
-                },
-                Achievement: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'string' },
-                        name: { type: 'string' },
-                        description: { type: 'string' },
-                        isUnlocked: { type: 'boolean' },
-                        unlocked_at: { type: 'string', format: 'date-time', nullable: true },
                     },
                 },
             },

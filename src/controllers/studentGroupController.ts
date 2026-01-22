@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
-import * as StudentGroupModel from '../models/studentGroupModel';
+import * as GroupModel from '../models/studentGroups/groupsModel';
+import * as GroupMembersModel from '../models/studentGroups/groupMembersModel';
 import { z } from 'zod';
-import { logActivity } from '../models/activityModel';
+import { logActivity } from '../models/audit/activityLogModel';
 
 const groupSchema = z.object({
     name: z.string(),
-    description: z.string().optional().nullable(),
+    level_tag: z.string().optional().nullable(),
     teacher_id: z.string().optional().nullable(),
 });
 
@@ -14,7 +15,7 @@ export const createGroup = async (req: Request, res: Response) => {
         const data = groupSchema.parse(req.body);
         const teacherId = data.teacher_id || (req as any).user.id;
 
-        const result = await StudentGroupModel.createGroup({
+        const result = await GroupModel.createGroup({
             ...data,
             teacher_id: teacherId
         });
@@ -35,7 +36,7 @@ export const createGroup = async (req: Request, res: Response) => {
 export const listGroups = async (req: Request, res: Response) => {
     try {
         const { teacherId } = req.query;
-        const groups = await StudentGroupModel.getGroups({ teacherId: teacherId as string });
+        const groups = await GroupModel.listGroups({ teacherId: teacherId as string });
         return res.json(groups);
     } catch (error) {
         return res.status(500).json({ message: "Error al listar grupos" });
@@ -45,9 +46,14 @@ export const listGroups = async (req: Request, res: Response) => {
 export const getGroup = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        const group = await StudentGroupModel.getGroupById(id);
+        const group = await GroupModel.getGroupById(id);
         if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
-        return res.json(group);
+
+        const members = await GroupMembersModel.listMembers(id);
+        return res.json({
+            ...group,
+            members
+        });
     } catch (error) {
         return res.status(500).json({ message: "Error al obtener grupo" });
     }
@@ -57,7 +63,7 @@ export const addMember = async (req: Request, res: Response) => {
     try {
         const groupId = req.params.id as string;
         const { userId } = req.body;
-        await StudentGroupModel.addMemberToGroup(groupId, userId);
+        await GroupMembersModel.addMember(groupId, userId);
         return res.json({ message: "Alumno añadido al grupo" });
     } catch (error) {
         return res.status(500).json({ message: "Error al añadir alumno" });
@@ -68,7 +74,7 @@ export const removeMember = async (req: Request, res: Response) => {
     try {
         const groupId = req.params.id as string;
         const userId = req.params.userId as string;
-        await StudentGroupModel.removeMemberFromGroup(groupId, userId);
+        await GroupMembersModel.removeMember(groupId, userId);
         return res.json({ message: "Alumno eliminado del grupo" });
     } catch (error) {
         return res.status(500).json({ message: "Error al eliminar alumno" });
@@ -78,7 +84,7 @@ export const removeMember = async (req: Request, res: Response) => {
 export const deleteGroup = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        await StudentGroupModel.deleteGroup(id);
+        await GroupModel.deleteGroup(id);
         return res.json({ message: "Grupo eliminado" });
     } catch (error) {
         return res.status(500).json({ message: "Error al eliminar grupo" });
@@ -89,7 +95,7 @@ export const updateGroup = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
         const data = groupSchema.partial().parse(req.body);
-        await StudentGroupModel.updateGroup(id, data as any);
+        await GroupModel.updateGroup(id, data as any);
         return res.json({ message: "Grupo actualizado" });
     } catch (error) {
         return res.status(400).json({ message: "Datos inválidos", error });
@@ -99,9 +105,10 @@ export const updateGroup = async (req: Request, res: Response) => {
 export const getGroupMembers = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        const group = await StudentGroupModel.getGroupById(id);
+        const group = await GroupModel.getGroupById(id);
         if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
-        return res.json(group.members);
+        const members = await GroupMembersModel.listMembers(id);
+        return res.json(members);
     } catch (error) {
         return res.status(500).json({ message: "Error al obtener miembros del grupo" });
     }

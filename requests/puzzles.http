@@ -1,0 +1,39 @@
+@baseUrl = http://localhost:3000
+@token = {{login.response.body.token}}
+
+### Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "test@example.com",
+    "password": "password123"
+}
+
+### List Puzzles
+GET {{baseUrl}}/puzzles
+
+### Create Puzzle (Admin)
+POST {{baseUrl}}/puzzles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "external_id": "lichess_002",
+    "initial_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "solution_moves": "[\"e4\", \"e5\"]",
+    "rating": 1200,
+    "themes": "[\"opening\"]"
+}
+
+### Solve Puzzle
+POST {{baseUrl}}/puzzles/solve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "puzzle_id": "puzzle_uuid_here",
+    "solved": true,
+    "time_spent": 30
+}

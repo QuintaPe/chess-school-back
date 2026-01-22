@@ -1,23 +1,18 @@
 import { Request, Response } from 'express';
-import * as PuzzleModel from '../models/puzzleModel';
+import * as PuzzleModel from '../models/puzzles/puzzlesModel';
+import * as UserModel from '../models/auth/userModel';
+import * as PuzzleAttemptModel from '../models/puzzles/puzzleAttemptsModel';
 import { z } from 'zod';
 import fs from 'fs';
-import path from 'path';
 import { parse } from 'csv-parse';
-import { logActivity } from '../models/activityModel';
+import { logActivity } from '../models/audit/activityLogModel';
 
 const puzzleSchema = z.object({
     externalId: z.string().optional(),
-    fen: z.string(),
-    solution: z.array(z.string()),
+    initial_fen: z.string(),
+    solution_moves: z.array(z.string()),
     rating: z.number(),
-    ratingDeviation: z.number().optional(),
-    popularity: z.number().optional(),
-    nbPlays: z.number().optional(),
-    turn: z.enum(['w', 'b']),
-    tags: z.array(z.string()).optional(),
-    gameUrl: z.string().optional(),
-    openingTags: z.array(z.string()).optional(),
+    themes: z.array(z.string()).optional(),
 });
 
 const updatePuzzleSchema = puzzleSchema.partial();
@@ -28,7 +23,7 @@ export const listPuzzles = async (req: Request, res: Response) => {
         const result = await PuzzleModel.getPuzzles({
             ratingMin: ratingMin ? parseInt(ratingMin as string) : undefined,
             ratingMax: ratingMax ? parseInt(ratingMax as string) : undefined,
-            tags: tags ? (tags as string).split(',') : undefined,
+            themes: tags ? (tags as string).split(',') : undefined,
             page: page ? parseInt(page as string) : 1,
             limit: limit ? parseInt(limit as string) : 20,
             sort: sort as string,
@@ -41,12 +36,10 @@ export const listPuzzles = async (req: Request, res: Response) => {
     }
 };
 
-import * as UserModel from '../models/userModel';
-
 export const solvePuzzle = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
-        const { puzzleId, moves, solution } = req.body; // moves or solution string (puzzleId should be string)
+        const { puzzleId, moves, solution, timeSpent } = req.body;
 
         const puzzle = await PuzzleModel.getPuzzleById(puzzleId as string);
         if (!puzzle) return res.status(404).json({ message: "Puzzle not found" });
@@ -58,52 +51,21 @@ export const solvePuzzle = async (req: Request, res: Response) => {
         else if (Array.isArray(solution)) userMoves = solution;
 
         // Check if moves match sequence exactly
-        const isCorrect = JSON.stringify(puzzle.solution) === JSON.stringify(userMoves);
+        const isCorrect = JSON.stringify(puzzle.solution_moves) === JSON.stringify(userMoves);
 
-        await PuzzleModel.recordPuzzleSolve(userId, puzzleId as string, isCorrect);
+        await PuzzleAttemptModel.recordPuzzleAttempt({
+            userId,
+            puzzleId: puzzleId as string,
+            solved: isCorrect,
+            timeSpent: typeof timeSpent === 'number' ? timeSpent : undefined,
+            ratingDelta: null as any
+        });
 
         if (isCorrect) {
             const user = await UserModel.findUserById(userId);
             if (user) {
                 await logActivity('puzzle_solved', `El alumno ${(user as any).name} ha resuelto el puzzle #${puzzleId}`);
             }
-        }
-
-        // --- ELO Calculation ---
-        const userStats = await UserModel.getUserStats(userId);
-        if (userStats) {
-            const K = 32; // Scaling factor
-            const currentRating = (userStats.rating || 1200) as number;
-            const puzzleRating = (puzzle.rating || 1200) as number;
-
-            // Experienced probability
-            const expectedScore = 1 / (1 + Math.pow(10, (puzzleRating - currentRating) / 400));
-
-            // Actual Score
-            const actualScore = isCorrect ? 1 : 0;
-
-            // Calculate change
-            let ratingChange = Math.round(K * (actualScore - expectedScore));
-
-            // Safeguard: Solving correctly should never decrease rating
-            if (isCorrect && ratingChange < 0) ratingChange = 0;
-            // Safeguard: Failing should never increase rating
-            if (!isCorrect && ratingChange > 0) ratingChange = 0;
-
-            const newRating = currentRating + ratingChange;
-
-            await UserModel.updateUserStats(userId, {
-                rating: newRating,
-                // also update stats
-                puzzles_solved: isCorrect ? ((userStats.puzzles_solved || 0) as number) + 1 : (userStats.puzzles_solved || 0) as number
-            });
-
-            return res.json({
-                correct: isCorrect,
-                message: isCorrect ? "Excellent! You solved it." : "Incorrect. Try again.",
-                ratingDelta: newRating - currentRating,
-                newRating
-            });
         }
 
         return res.json({
@@ -169,32 +131,19 @@ export const importCSV = async (req: Request, res: Response) => {
             const fen = record.FEN || record.fen;
             const movesStr = record.Moves || record.moves;
             const rating = parseInt(record.Rating || record.rating || '800');
-            const ratingDeviation = parseInt(record.RatingDeviation || record.ratingDeviation || '0');
-            const popularity = parseInt(record.Popularity || record.popularity || '0');
-            const nbPlays = parseInt(record.NbPlays || record.nbPlays || '0');
             const themesStr = record.Themes || record.themes || '';
-            const gameUrl = record.GameUrl || record.gameUrl || '';
-            const openingTagsStr = record.OpeningTags || record.openingTags || '';
 
             if (!fen || !movesStr) continue;
 
             const solution = movesStr.split(' ');
             const tags = themesStr.split(' ').filter((t: string) => t.length > 0);
-            const openingTags = openingTagsStr.split(' ').filter((t: string) => t.length > 0);
-            const turn = fen.split(' ')[1] === 'w' ? 'w' : 'b';
 
             await PuzzleModel.createPuzzle({
                 externalId,
-                fen,
-                solution,
+                initial_fen: fen,
+                solution_moves: solution,
                 rating,
-                ratingDeviation,
-                popularity,
-                nbPlays,
-                turn,
-                tags,
-                gameUrl,
-                openingTags
+                themes: tags
             });
             importedCount++;
         }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getMe, getStats, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser } from '../controllers/authController';
+import { register, login, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser } from '../controllers/authController';
 import { verifyToken, isAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -21,7 +21,6 @@ const router = Router();
  *               email: { type: 'string', format: 'email' }
  *               password: { type: 'string', minLength: 6 }
  *               name: { type: 'string' }
- *               role: { type: 'string', enum: [student, teacher, admin] }
  *     responses:
  *       201:
  *         description: Usuario creado exitosamente
@@ -81,20 +80,6 @@ router.get('/me', verifyToken, getMe);
 
 /**
  * @openapi
- * /auth/me/stats:
- *   get:
- *     summary: Obtener estadísticas y logros del usuario
- *     tags: [Perfil]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Resumen de rating, puzzles y logros
- */
-router.get('/me/stats', verifyToken, getStats);
-
-/**
- * @openapi
  * /auth/me:
  *   patch:
  *     summary: Actualizar perfil del usuario
@@ -139,11 +124,21 @@ router.get('/users', verifyToken, isAdmin, getAllUsers);
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
  *         name: id
  *         required: true
  *         schema: { type: 'string' }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               roles:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               subscription_plan: { type: 'string', enum: [free, premium] }
+ *               status: { type: 'string', enum: [active, inactive] }
  *     responses:
  *       200:
  *         description: Usuario actualizado
