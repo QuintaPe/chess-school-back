@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as StudentGroupController from '../controllers/studentGroupController';
+import * as StudentGroupController from '../controllers/studentGroups.controller';
 import { verifyToken, isStaff } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -17,3 +17,4 @@ router.post('/:id/members', verifyToken, isStaff, StudentGroupController.addMemb
 router.delete('/:id/members/:userId', verifyToken, isStaff, StudentGroupController.removeMember);
 
 export default router;
+

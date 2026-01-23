@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import * as UserRoleModel from '../models/auth/userRolesModel';
+import * as UserRoleModel from '../models/auth/userRole.model';
 
 export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -62,3 +62,4 @@ export const isStaff = (req: Request, res: Response, next: NextFunction) => {
     }
     next();
 };
+

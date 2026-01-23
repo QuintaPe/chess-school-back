@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import * as UserModel from '../models/auth/userModel';
-import * as UserRoleModel from '../models/auth/userRolesModel';
+import * as UserModel from '../models/auth/user.model';
+import * as UserRoleModel from '../models/auth/userRole.model';
 import { z } from 'zod';
-import { logActivity } from '../models/audit/activityLogModel';
+import { logActivity } from '../models/audit/activityLog.model';
 
 const registerSchema = z.object({
     email: z.string().email(),
@@ -190,3 +190,4 @@ export const adminDeleteUser = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Error deleting user" });
     }
 };
+

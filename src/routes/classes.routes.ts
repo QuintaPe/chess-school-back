@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as ClassController from '../controllers/classController';
+import * as ClassController from '../controllers/classes.controller';
 import { verifyToken, isStaff, optionalAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -128,3 +128,4 @@ router.delete('/:id', verifyToken, isStaff, ClassController.deleteClass);
 router.post('/:id/register', verifyToken, ClassController.registerToClass);
 
 export default router;
+

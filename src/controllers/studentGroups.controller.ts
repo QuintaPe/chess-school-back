@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import * as GroupModel from '../models/studentGroups/groupsModel';
-import * as GroupMembersModel from '../models/studentGroups/groupMembersModel';
+import * as GroupModel from '../models/studentGroups/group.model';
+import * as GroupMembersModel from '../models/studentGroups/groupMember.model';
 import { z } from 'zod';
-import { logActivity } from '../models/audit/activityLogModel';
+import { logActivity } from '../models/audit/activityLog.model';
 
 const groupSchema = z.object({
     name: z.string(),
@@ -113,3 +113,4 @@ export const getGroupMembers = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Error al obtener miembros del grupo" });
     }
 };
+

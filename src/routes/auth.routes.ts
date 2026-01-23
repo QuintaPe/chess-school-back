@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { register, login, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser } from '../controllers/authController';
-import * as RoleController from '../controllers/roleController';
+import { register, login, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser } from '../controllers/auth.controller';
+import * as RoleController from '../controllers/roles.controller';
 import { verifyToken, isAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -177,3 +177,4 @@ router.get('/admin/roles/:id/permissions', verifyToken, isAdmin, RoleController.
 router.post('/admin/roles/:id/permissions', verifyToken, isAdmin, RoleController.updateRolePermissions);
 
 export default router;
+

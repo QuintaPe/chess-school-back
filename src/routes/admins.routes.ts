@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as AdminController from '../controllers/adminController';
+import * as AdminController from '../controllers/admins.controller';
 import { verifyToken, isAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -19,3 +19,4 @@ const router = Router();
 router.get('/stats', verifyToken, isAdmin, AdminController.getDashboardStats);
 
 export default router;
+

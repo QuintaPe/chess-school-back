@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as PuzzleController from '../controllers/puzzleController';
+import * as PuzzleController from '../controllers/puzzles.controller';
 import { verifyToken, isAdmin, optionalAuth } from '../middlewares/authMiddleware';
 import multer from 'multer';
 
@@ -33,3 +33,4 @@ router.delete('/:id', verifyToken, isAdmin, PuzzleController.deletePuzzle);
 router.post('/import-csv', verifyToken, isAdmin, upload.single('file'), PuzzleController.importCSV);
 
 export default router;
+

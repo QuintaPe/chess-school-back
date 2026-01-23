@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import * as UserModel from '../models/auth/userModel';
-import * as ClassModel from '../models/classes/liveClassesModel'; // For settings
+import * as UserModel from '../models/auth/user.model';
+import * as ClassModel from '../models/classes/liveClass.model'; // For settings
 
 
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
@@ -156,3 +156,4 @@ export const updateSettings = async (req: Request, res: Response) => {
         res.status(400).json({ message: "Invalid settings data" });
     }
 };
+

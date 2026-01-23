@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as CourseController from '../controllers/courseController';
+import * as CourseController from '../controllers/courses.controller';
 import { verifyToken, isAdmin, optionalAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -176,3 +176,4 @@ router.post('/lessons/:lessonId/complete', verifyToken, CourseController.complet
 router.delete('/lessons/:lessonId/complete', verifyToken, CourseController.uncompleteLesson);
 
 export default router;
+

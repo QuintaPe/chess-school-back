@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../config/db';
-import { getRecentActivity } from '../models/audit/activityLogModel';
+import { getRecentActivity } from '../models/audit/activityLog.model';
 
 export const getDashboardStats = async (req: Request, res: Response) => {
     try {
@@ -80,3 +80,4 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         return res.status(500).json({ error: "Error interno del servidor" });
     }
 };
+

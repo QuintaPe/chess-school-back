@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import * as BillingController from '../controllers/billingController';
+import * as BillingController from '../controllers/billings.controller';
 import { verifyToken, isAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -23,3 +23,4 @@ router.get('/transactions', BillingController.getTransactions);
 router.patch('/transactions/:id/status', BillingController.updateTransactionStatus);
 
 export default router;
+

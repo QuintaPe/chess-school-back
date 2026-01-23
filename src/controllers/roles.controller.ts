@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import * as RoleModel from '../models/auth/roleModel';
-import * as PermissionModel from '../models/auth/permissionModel';
-import * as RolePermissionModel from '../models/auth/rolePermissionModel';
+import * as RoleModel from '../models/auth/role.model';
+import * as PermissionModel from '../models/auth/permission.model';
+import * as RolePermissionModel from '../models/auth/rolePermission.model';
 
 export const getRoles = async (req: Request, res: Response) => {
     try {
@@ -104,3 +104,4 @@ export const updateRolePermissions = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Error updating role permissions", error });
     }
 };
+

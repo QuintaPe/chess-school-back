@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import * as PuzzleModel from '../models/puzzles/puzzlesModel';
-import * as UserModel from '../models/auth/userModel';
-import * as PuzzleAttemptModel from '../models/puzzles/puzzleAttemptsModel';
+import * as PuzzleModel from '../models/puzzles/puzzle.model';
+import * as UserModel from '../models/auth/user.model';
+import * as PuzzleAttemptModel from '../models/puzzles/puzzleAttempt.model';
 import { z } from 'zod';
 import fs from 'fs';
 import { parse } from 'csv-parse';
-import { logActivity } from '../models/audit/activityLogModel';
+import { logActivity } from '../models/audit/activityLog.model';
 
 const puzzleSchema = z.object({
     externalId: z.string().optional(),
@@ -160,3 +160,4 @@ export const importCSV = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Error importing CSV", error });
     }
 };
+

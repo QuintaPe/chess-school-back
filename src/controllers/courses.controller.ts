@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { logActivity } from '../models/audit/activityLogModel';
-import * as UserModel from '../models/auth/userModel';
-import * as CoursesModel from '../models/courses/coursesModel';
-import * as ModulesModel from '../models/courses/modulesModel';
-import * as LessonsModel from '../models/courses/lessonsModel';
-import * as UserProgressModel from '../models/courses/userProgressModel';
-import * as UserEntitlementsModel from '../models/billing/userEntitlementsModel';
+import { logActivity } from '../models/audit/activityLog.model';
+import * as UserModel from '../models/auth/user.model';
+import * as CoursesModel from '../models/courses/course.model';
+import * as ModulesModel from '../models/courses/module.model';
+import * as LessonsModel from '../models/courses/lesson.model';
+import * as UserProgressModel from '../models/courses/userProgress.model';
+import * as UserEntitlementsModel from '../models/billing/userEntitlement.model';
 
 const courseSchema = z.object({
     title: z.string(),
@@ -281,3 +281,4 @@ export const uncompleteLesson = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Error uncompleting lesson" });
     }
 };
+

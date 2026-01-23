@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { redirectToDiscord, handleDiscordCallback, getSettings, updateSettings, unlinkDiscord, syncAllRoles } from '../controllers/discordController';
+import { redirectToDiscord, handleDiscordCallback, getSettings, updateSettings, unlinkDiscord, syncAllRoles } from '../controllers/discords.controller';
 import { verifyToken, isAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -89,3 +89,4 @@ router.get('/settings', verifyToken, isAdmin, getSettings);
 router.patch('/settings', verifyToken, isAdmin, updateSettings);
 
 export default router;
+

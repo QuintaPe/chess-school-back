@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import * as ProductModel from '../models/billing/productModel';
-import * as TransactionModel from '../models/billing/transactionModel';
-import * as ProductResourceModel from '../models/billing/productResourceModel';
+import * as ProductModel from '../models/billing/product.model';
+import * as TransactionModel from '../models/billing/transaction.model';
+import * as ProductResourceModel from '../models/billing/productResource.model';
 
 // --- Products ---
 
@@ -132,3 +132,4 @@ export const updateTransactionStatus = async (req: Request, res: Response) => {
         return res.status(500).json({ error: "Error al actualizar estado de transacción" });
     }
 };
+

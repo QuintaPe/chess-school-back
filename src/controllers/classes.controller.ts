@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import * as LiveClassModel from '../models/classes/liveClassesModel';
-import * as LiveAttendanceModel from '../models/classes/liveAttendanceModel';
+import * as LiveClassModel from '../models/classes/liveClass.model';
+import * as LiveAttendanceModel from '../models/classes/liveAttendance.model';
 import { z } from 'zod';
-import { logActivity } from '../models/audit/activityLogModel';
+import { logActivity } from '../models/audit/activityLog.model';
 
 const classSchema = z.object({
     title: z.string(),
@@ -103,3 +103,4 @@ export const deleteClass = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Error deleting class" });
     }
 };
+
