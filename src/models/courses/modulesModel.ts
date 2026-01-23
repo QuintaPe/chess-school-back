@@ -32,3 +32,23 @@ export const getFirstModuleIdForCourse = async (courseId: string) => {
     });
     return (res.rows[0] as any)?.id as string | undefined;
 };
+
+export const updateModule = async (id: string, updates: Partial<Module>) => {
+    const fields = Object.keys(updates);
+    if (fields.length === 0) return;
+
+    const setClause = fields.map(f => `${f} = ?`).join(', ');
+    const args = [...Object.values(updates), id];
+
+    await db.execute({
+        sql: `UPDATE modules SET ${setClause} WHERE id = ?`,
+        args
+    });
+};
+
+export const deleteModule = async (id: string) => {
+    await db.execute({
+        sql: "DELETE FROM modules WHERE id = ?",
+        args: [id]
+    });
+};

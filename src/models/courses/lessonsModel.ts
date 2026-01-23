@@ -84,3 +84,23 @@ export const updateLessonOrder = async (lessonId: string, oldIndex: number, newI
         args: [newIndex, lessonId]
     });
 };
+
+export const updateLesson = async (id: string, updates: Partial<Lesson>) => {
+    const fields = Object.keys(updates);
+    if (fields.length === 0) return;
+
+    const setClause = fields.map(f => `${f} = ?`).join(', ');
+    const args = [...Object.values(updates), id];
+
+    await db.execute({
+        sql: `UPDATE lessons SET ${setClause} WHERE id = ?`,
+        args
+    });
+};
+
+export const deleteLesson = async (id: string) => {
+    await db.execute({
+        sql: "DELETE FROM lessons WHERE id = ?",
+        args: [id]
+    });
+};

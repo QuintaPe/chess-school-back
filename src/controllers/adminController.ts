@@ -11,7 +11,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         });
         const teachersCount = await db.execute({
             sql: "SELECT COUNT(DISTINCT ur.user_id) as count FROM user_roles ur WHERE ur.role_id = ?",
-            args: ['role_coach']
+            args: ['role_teacher']
         });
         const activeClassesCount = await db.execute("SELECT COUNT(*) as count FROM live_classes WHERE status IN ('scheduled', 'live')");
         const puzzlesCount = await db.execute("SELECT COUNT(*) as count FROM puzzles");

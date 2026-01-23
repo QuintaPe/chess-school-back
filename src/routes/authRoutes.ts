@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { register, login, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser } from '../controllers/authController';
+import * as RoleController from '../controllers/roleController';
 import { verifyToken, isAdmin } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -163,5 +164,16 @@ router.patch('/users/:id', verifyToken, isAdmin, adminUpdateUser);
  *         description: Usuario eliminado
  */
 router.delete('/users/:id', verifyToken, isAdmin, adminDeleteUser);
+
+// Role Management Routes
+router.get('/admin/roles', verifyToken, isAdmin, RoleController.getRoles);
+router.post('/admin/roles', verifyToken, isAdmin, RoleController.createRole);
+router.put('/admin/roles/:id', verifyToken, isAdmin, RoleController.updateRole);
+router.delete('/admin/roles/:id', verifyToken, isAdmin, RoleController.deleteRole);
+
+// Permission Management Routes
+router.get('/admin/permissions', verifyToken, isAdmin, RoleController.getPermissions);
+router.get('/admin/roles/:id/permissions', verifyToken, isAdmin, RoleController.getRolePermissions);
+router.post('/admin/roles/:id/permissions', verifyToken, isAdmin, RoleController.updateRolePermissions);
 
 export default router;

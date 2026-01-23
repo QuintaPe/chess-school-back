@@ -62,10 +62,16 @@ export const getCourse = async (req: Request, res: Response) => {
         const total_lessons = lessonsWithProgress.length;
         const completed_lessons = lessonsWithProgress.filter((l: any) => l.is_completed).length;
 
+        const modulesWithLessons = modules.map((m: any) => ({
+            ...m,
+            lessons: lessonsWithProgress.filter((l: any) => l.module_id === m.id)
+        }));
+
         return res.json({
             ...course,
-            modules,
-            lessons: lessonsWithProgress,
+            modules: modulesWithLessons,
+            total_lessons,
+            completed_lessons,
             progress_percentage: total_lessons > 0 ? Math.round((completed_lessons / total_lessons) * 100) : 0
         });
     } catch (error) {
@@ -103,23 +109,84 @@ export const createCourse = async (req: Request, res: Response) => {
     }
 };
 
+export const updateCourse = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const updates = req.body;
+        await CoursesModel.updateCourse(id, updates);
+        return res.json({ message: "Course updated" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error updating course" });
+    }
+};
+
+export const deleteCourse = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        await CoursesModel.deleteCourse(id);
+        return res.json({ message: "Course deleted" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error deleting course" });
+    }
+};
+
+export const addModule = async (req: Request, res: Response) => {
+    try {
+        const courseId = req.params.id as string;
+        const { title, order_index } = req.body;
+        await ModulesModel.createModule({
+            course_id: courseId,
+            title,
+            order_index: order_index || 0
+        });
+        return res.status(201).json({ message: "Module added" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error adding module" });
+    }
+};
+
+export const updateModule = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.moduleId);
+        const updates = req.body;
+        await ModulesModel.updateModule(id, updates);
+        return res.json({ message: "Module updated" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error updating module" });
+    }
+};
+
+export const deleteModule = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.moduleId);
+        await ModulesModel.deleteModule(id);
+        return res.json({ message: "Module deleted" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error deleting module" });
+    }
+};
+
 export const addLesson = async (req: Request, res: Response) => {
     try {
         const courseId = req.params.id as string;
         const data = lessonSchema.parse(req.body);
+        const { module_id } = req.body;
 
-        let moduleId = await ModulesModel.getFirstModuleIdForCourse(courseId);
-        if (!moduleId) {
-            const moduleRes = await ModulesModel.createModule({
-                course_id: courseId,
-                title: 'Módulo 1',
-                order_index: 0
-            });
-            moduleId = moduleRes.lastInsertRowid as string;
+        let effectiveModuleId = module_id;
+        if (!effectiveModuleId) {
+            effectiveModuleId = await ModulesModel.getFirstModuleIdForCourse(courseId);
+            if (!effectiveModuleId) {
+                const moduleRes = await ModulesModel.createModule({
+                    course_id: courseId,
+                    title: 'Módulo 1',
+                    order_index: 0
+                });
+                effectiveModuleId = moduleRes.lastInsertRowid as string;
+            }
         }
 
         await LessonsModel.createLesson({
-            module_id: moduleId,
+            module_id: effectiveModuleId,
             title: data.title,
             lesson_type: data.video_url ? 'video' : 'article',
             content_md: data.content ?? null,
@@ -150,6 +217,27 @@ export const updateLessonOrder = async (req: Request, res: Response) => {
         return res.json({ message: "Lesson order updated" });
     } catch (error) {
         return res.status(500).json({ message: "Error updating order" });
+    }
+};
+
+export const updateLesson = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const updates = req.body;
+        await LessonsModel.updateLesson(id, updates);
+        return res.json({ message: "Lesson updated" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error updating lesson" });
+    }
+};
+
+export const deleteLesson = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        await LessonsModel.deleteLesson(id);
+        return res.json({ message: "Lesson deleted" });
+    } catch (error) {
+        return res.status(500).json({ message: "Error deleting lesson" });
     }
 };
 

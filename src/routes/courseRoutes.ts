@@ -66,6 +66,15 @@ router.get('/:id', optionalAuth, CourseController.getCourse);
  */
 router.post('/', verifyToken, isAdmin, CourseController.createCourse);
 
+router.put('/:id', verifyToken, isAdmin, CourseController.updateCourse);
+
+router.delete('/:id', verifyToken, isAdmin, CourseController.deleteCourse);
+
+// Module Management
+router.post('/:id/modules', verifyToken, isAdmin, CourseController.addModule);
+router.put('/modules/:moduleId', verifyToken, isAdmin, CourseController.updateModule);
+router.delete('/modules/:moduleId', verifyToken, isAdmin, CourseController.deleteModule);
+
 /**
  * @openapi
  * /courses/{id}/lessons:
@@ -87,7 +96,7 @@ router.post('/:id/lessons', verifyToken, isAdmin, CourseController.addLesson);
 
 /**
  * @openapi
- * /courses/lessons/{id}:
+ * /courses/lessons/order/{id}:
  *   put:
  *     summary: Cambiar orden de lección (Admin)
  *     tags: [Cursos]
@@ -97,12 +106,16 @@ router.post('/:id/lessons', verifyToken, isAdmin, CourseController.addLesson);
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: 'integer' }
+ *         schema: { type: 'string' }
  *     responses:
  *       200:
  *         description: Orden actualizado
  */
-router.put('/lessons/:id', verifyToken, isAdmin, CourseController.updateLessonOrder);
+router.put('/lessons/order/:id', verifyToken, isAdmin, CourseController.updateLessonOrder);
+
+router.put('/lessons/:id', verifyToken, isAdmin, CourseController.updateLesson);
+
+router.delete('/lessons/:id', verifyToken, isAdmin, CourseController.deleteLesson);
 
 // Enrollment & Progress
 /**

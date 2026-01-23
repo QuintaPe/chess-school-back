@@ -86,3 +86,12 @@ export const listCourses = async (filters: { level?: string; publishedOnly?: boo
     const res = await db.execute({ sql: query, args });
     return res.rows.map((r: any) => ({ ...r, is_published: Boolean(r.is_published) }));
 };
+
+export const deleteCourse = async (id: string) => {
+    // Note: Depends on ON DELETE CASCADE in DB for lessons/progress, 
+    // but if not present, we should delete them manually.
+    await db.execute({
+        sql: "DELETE FROM courses WHERE id = ?",
+        args: [id]
+    });
+};

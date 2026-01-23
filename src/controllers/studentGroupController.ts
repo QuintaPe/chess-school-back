@@ -45,7 +45,7 @@ export const listGroups = async (req: Request, res: Response) => {
 
 export const getGroup = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         const group = await GroupModel.getGroupById(id);
         if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
 
@@ -61,7 +61,7 @@ export const getGroup = async (req: Request, res: Response) => {
 
 export const addMember = async (req: Request, res: Response) => {
     try {
-        const groupId = req.params.id as string;
+        const groupId = String(req.params.id);
         const { userId } = req.body;
         await GroupMembersModel.addMember(groupId, userId);
         return res.json({ message: "Alumno añadido al grupo" });
@@ -72,8 +72,8 @@ export const addMember = async (req: Request, res: Response) => {
 
 export const removeMember = async (req: Request, res: Response) => {
     try {
-        const groupId = req.params.id as string;
-        const userId = req.params.userId as string;
+        const groupId = String(req.params.id);
+        const userId = String(req.params.userId);
         await GroupMembersModel.removeMember(groupId, userId);
         return res.json({ message: "Alumno eliminado del grupo" });
     } catch (error) {
@@ -83,7 +83,7 @@ export const removeMember = async (req: Request, res: Response) => {
 
 export const deleteGroup = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         await GroupModel.deleteGroup(id);
         return res.json({ message: "Grupo eliminado" });
     } catch (error) {
@@ -93,7 +93,7 @@ export const deleteGroup = async (req: Request, res: Response) => {
 
 export const updateGroup = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         const data = groupSchema.partial().parse(req.body);
         await GroupModel.updateGroup(id, data as any);
         return res.json({ message: "Grupo actualizado" });
@@ -104,7 +104,7 @@ export const updateGroup = async (req: Request, res: Response) => {
 
 export const getGroupMembers = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         const group = await GroupModel.getGroupById(id);
         if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
         const members = await GroupMembersModel.listMembers(id);

@@ -41,7 +41,7 @@ export const solvePuzzle = async (req: Request, res: Response) => {
         const userId = (req as any).user.id;
         const { puzzleId, moves, solution, timeSpent } = req.body;
 
-        const puzzle = await PuzzleModel.getPuzzleById(puzzleId as string);
+        const puzzle = await PuzzleModel.getPuzzleById(String(puzzleId));
         if (!puzzle) return res.status(404).json({ message: "Puzzle not found" });
 
         // Normalize user moves: support both array and space-separated string
@@ -55,7 +55,7 @@ export const solvePuzzle = async (req: Request, res: Response) => {
 
         await PuzzleAttemptModel.recordPuzzleAttempt({
             userId,
-            puzzleId: puzzleId as string,
+            puzzleId: String(puzzleId),
             solved: isCorrect,
             timeSpent: typeof timeSpent === 'number' ? timeSpent : undefined,
             ratingDelta: null as any
@@ -90,7 +90,7 @@ export const createPuzzle = async (req: Request, res: Response) => {
 
 export const updatePuzzle = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         const data = updatePuzzleSchema.parse(req.body);
         await PuzzleModel.updatePuzzle(id, data as any);
         return res.json({ message: "Puzzle updated" });
@@ -104,7 +104,7 @@ export const updatePuzzle = async (req: Request, res: Response) => {
 
 export const deletePuzzle = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         await PuzzleModel.deletePuzzle(id);
         return res.json({ message: "Puzzle deleted" });
     } catch (error) {

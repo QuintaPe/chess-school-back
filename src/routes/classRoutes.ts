@@ -18,7 +18,7 @@ const router = Router();
  *       200:
  *         description: Lista de clases
  */
-router.get('/', ClassController.listClasses);
+router.get('/', optionalAuth, ClassController.listClasses);
 
 /**
  * @openapi

@@ -209,11 +209,13 @@ export const initDB = async () => {
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 teacher_id TEXT,
+                group_id TEXT,
                 scheduled_at DATETIME NOT NULL,
                 duration_mins INTEGER NOT NULL,
                 room_url TEXT,
                 status TEXT NOT NULL CHECK(status IN ('scheduled', 'live', 'finished')),
-                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+                FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE SET NULL
             )
         `);
 
@@ -253,12 +255,16 @@ export const initDB = async () => {
         });
         await db.execute({
             sql: "INSERT OR IGNORE INTO roles (id, name, role_type) VALUES (?, ?, ?)",
-            args: ['role_coach', 'Coach', 'admin']
+            args: ['role_teacher', 'Teacher', 'admin']
         });
         await db.execute({
             sql: "INSERT OR IGNORE INTO roles (id, name, role_type) VALUES (?, ?, ?)",
             args: ['role_student', 'Student', 'membership']
         });
+
+        // Migration: Rename role_coach to role_teacher if it exists
+        await db.execute("UPDATE OR IGNORE user_roles SET role_id = 'role_teacher' WHERE role_id = 'role_coach'");
+        await db.execute("DELETE FROM roles WHERE id = 'role_coach'");
 
         console.log("Database tables initialized successfully (Reino Ajedrez v1)");
     } catch (error) {

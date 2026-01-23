@@ -57,7 +57,7 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
 
 export const isStaff = (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
-    if (!user || (!user.roles.includes('role_admin') && !user.roles.includes('role_coach'))) {
+    if (!user || (!user.roles.includes('role_admin') && !user.roles.includes('role_teacher'))) {
         return res.status(403).json({ message: "Forbidden: Staff access required" });
     }
     next();

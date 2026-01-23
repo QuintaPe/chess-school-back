@@ -7,6 +7,7 @@ import classRoutes from './routes/classRoutes';
 import puzzleRoutes from './routes/puzzleRoutes';
 import courseRoutes from './routes/courseRoutes';
 import adminRoutes from './routes/adminRoutes';
+import billingRoutes from './routes/billingRoutes';
 import studentGroupRoutes from './routes/studentGroupRoutes';
 
 import swaggerUi from 'swagger-ui-express';
@@ -51,6 +52,7 @@ const startServer = async () => {
 
     app.use('/auth', authRoutes);
     app.use('/admin', adminRoutes);
+    app.use('/admin/billing', billingRoutes);
     app.use('/classes', classRoutes);
     app.use('/puzzles', puzzleRoutes);
     app.use('/courses', courseRoutes);

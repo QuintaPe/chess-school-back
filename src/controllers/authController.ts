@@ -12,6 +12,22 @@ const registerSchema = z.object({
     name: z.string(),
 });
 
+// Role mapping helpers
+export const mapDbRoleToClient = (dbRole: string): string => {
+    if (dbRole === 'role_admin') return 'admin';
+    if (dbRole === 'role_teacher' || dbRole === 'role_coach') return 'teacher';
+    if (dbRole === 'role_student') return 'student';
+    return dbRole;
+};
+
+export const mapClientRoleToDb = (clientRole: string): string => {
+    const role = clientRole.toLowerCase();
+    if (role === 'admin') return 'role_admin';
+    if (role === 'teacher') return 'role_teacher';
+    if (role === 'student') return 'role_student';
+    return clientRole;
+};
+
 export const register = async (req: Request, res: Response) => {
     try {
         const { email, password, name } = registerSchema.parse(req.body);
@@ -62,13 +78,15 @@ export const login = async (req: Request, res: Response) => {
             user_id: user.id
         }, process.env.JWT_SECRET || 'secret', { expiresIn: '24h' });
 
+        const mappedRoles = roles.map(mapDbRoleToClient);
+
         return res.json({
             token,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                roles,
+                roles: mappedRoles,
                 avatar_url: user.avatar_url
             }
         });
@@ -85,7 +103,8 @@ export const getMe = async (req: Request, res: Response) => {
 
         const { password_hash, ...userWithoutPassword } = user as any;
         const roles = await UserRoleModel.getUserRoles(userId);
-        return res.json({ ...userWithoutPassword, roles });
+        const mappedRoles = roles.map(mapDbRoleToClient);
+        return res.json({ ...userWithoutPassword, roles: mappedRoles });
     } catch (error) {
         return res.status(500).json({ message: "Error fetching profile" });
     }
@@ -112,28 +131,39 @@ export const getAllUsers = async (req: Request, res: Response) => {
     try {
         const role = req.query.role as string;
         const search = req.query.search as string;
+
+        const dbRole = role ? mapClientRoleToDb(role) : undefined;
+
         const users = await UserModel.listUsers({
-            role,
+            role: dbRole,
             search
         });
-        return res.json(users);
+
+        const formattedUsers = users.map((u: any) => ({
+            ...u,
+            roles: (u.roles || []).map(mapDbRoleToClient)
+        }));
+
+        return res.json(formattedUsers);
     } catch (error) {
+        console.error("Error fetching users:", error);
         return res.status(500).json({ message: "Error fetching users" });
     }
 };
 
 export const adminUpdateUser = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         const updates = req.body;
 
         if (updates.roles && Array.isArray(updates.roles)) {
             const currentRoles = await UserRoleModel.listUserRoleIds(id);
-            for (const role of currentRoles) {
-                await UserRoleModel.removeRoleFromUser(id, role);
+            for (const roleId of currentRoles) {
+                await UserRoleModel.removeRoleFromUser(id, roleId);
             }
-            for (const role of updates.roles) {
-                await UserRoleModel.assignRoleToUser(id, role);
+            for (const clientRole of updates.roles) {
+                const dbRole = mapClientRoleToDb(clientRole);
+                await UserRoleModel.assignRoleToUser(id, dbRole);
             }
             delete updates.roles;
         }
@@ -153,7 +183,7 @@ export const adminUpdateUser = async (req: Request, res: Response) => {
 
 export const adminDeleteUser = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id as string;
+        const id = String(req.params.id);
         await UserModel.deleteUser(id);
         return res.json({ message: "User deleted successfully" });
     } catch (error) {
